@@ -11,7 +11,7 @@ from telegram.ext import (CallbackContext, CommandHandler, ConversationHandler,
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from santabot.models import User
-
+from santabot.models import Event
 
 # Enable logging
 logging.basicConfig(
@@ -57,6 +57,13 @@ markup = ReplyKeyboardMarkup(
 
 def start(update: Update, context: CallbackContext) -> int:
     """Start the conversation and ask user for input."""
+    context.user_data['user_profile'], _ = User.objects.get_or_create(
+        external_id=update.message.from_user.id,
+        defaults={
+            'name': update.message.from_user.name,
+        },
+    )
+
     update.message.reply_text(
         "Организуй тайный обмен подарками, запусти праздничное настроение!",
         reply_markup=markup,
@@ -76,6 +83,11 @@ def cost_limits(update: Update, context: CallbackContext) -> int:
     """Ask the user for info about the selected predefined choice."""
     text = update.message.text
     context.user_data['game_name'] = text
+
+    if Event.objects.filter(name=text):
+        update.message.reply_text('Такое имя уже используется.')
+        update.message.reply_text('Название:')
+        return COST_LIMITS
 
     update.message.reply_text(
         f'Ограничение стоимости подарка: да/нет?',
@@ -103,6 +115,9 @@ def set_cost(update: Update, context: CallbackContext) -> int:
 
 def choose_date_reg(update: Update, context: CallbackContext) -> int:
     """Choose reg date ends."""
+    text = update.message.text
+    context.user_data['cost_range'] = text
+
     update.message.reply_text(
         f'Период регистрации участников:',
         reply_markup= ReplyKeyboardMarkup(
@@ -115,6 +130,9 @@ def choose_date_reg(update: Update, context: CallbackContext) -> int:
 
 def choose_date_send(update: Update, context: CallbackContext) -> int:
     """Choose send date."""
+    text = update.message.text
+    context.user_data['last_register_date'] = text
+
     update.message.reply_text(
         f'Дата отправки подарка:',
         reply_markup= ReplyKeyboardMarkup(
@@ -127,8 +145,17 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
 
 def bye_message(update: Update, context: CallbackContext) -> int:
     """Send bye message."""
-    data = context.user_data
-    print(data)
+    text = update.message.text
+    context.user_data['sending_date'] = text
+    
+    context.user_data['event'] = Event.objects.create(
+        name=context.user_data['game_name'],
+        creator=context.user_data['user_profile'],
+        cost_range=context.user_data['cost_range'],
+        last_register_date=context.user_data['last_register_date'],
+        sending_date=context.user_data['sending_date'],
+    )
+    print(context.user_data)
     update.message.reply_text('Отлично, Тайный Санта уже готовится к раздаче подарков!')
     update.message.reply_text('А здесь должна быть реферальная ссылка.')
 
