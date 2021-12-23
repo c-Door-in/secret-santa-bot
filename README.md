@@ -26,13 +26,17 @@ python manage.py migrate
 python manage.py bot
 ```
 ## Запуск админки
-Для запуска админки введите
+Для запуска админки:
+- создайте учетную запись
+```
+python manage.py createsuperuser
+```
+- запустите сервер
 ```
 python manage.py runserver
 ```
-Перейдите по адресу [http://127.0.0.1:8000/admin](http://127.0.0.1:8000/admin)
-Имя: `admin`
-Пароль: `admin`
+- перейдите по адресу [http://127.0.0.1:8000/admin](http://127.0.0.1:8000/admin)
+
 
 ## Редактирование бота
 Код бота располагается в `/tgadmin/santabot/management/commands/bot.py`
