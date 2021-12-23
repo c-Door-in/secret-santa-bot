@@ -160,6 +160,9 @@ def bye_message(update: Update, context: CallbackContext) -> int:
         sending_date=context.user_data['sending_date'],
     )
     print(context.user_data)
+
+    game_id = context.user_data['event'].pk
+    print(f'GAME_ID - {game_id}')
     update.message.reply_text('Отлично, Тайный Санта уже готовится к раздаче подарков!')
     update.message.reply_text('А здесь должна быть реферальная ссылка.')
 
