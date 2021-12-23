@@ -132,6 +132,8 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
     """Choose send date."""
     text = update.message.text
     context.user_data['last_register_date'] = text
+    # TODO:
+    #   Изменить формат last_register_date на Datetime.
 
     update.message.reply_text(
         f'Дата отправки подарка:',
@@ -147,7 +149,9 @@ def bye_message(update: Update, context: CallbackContext) -> int:
     """Send bye message."""
     text = update.message.text
     context.user_data['sending_date'] = text
-    
+    # TODO:
+    #   Изменить формат sending_date на Datetime.
+
     context.user_data['event'] = Event.objects.create(
         name=context.user_data['game_name'],
         creator=context.user_data['user_profile'],
