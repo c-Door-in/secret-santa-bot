@@ -1,17 +1,16 @@
 #!/usr/bin/env python
 # pylint: disable=C0116,W0613
 import logging
-import os
 from typing import Dict
 
-from dotenv import load_dotenv
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup,
                       ReplyKeyboardMarkup, ReplyKeyboardRemove, Update)
 from telegram.ext import (CallbackContext, CommandHandler, ConversationHandler,
                           Filters, MessageHandler, Updater)
 
-load_dotenv()
-tg_api_token = os.environ.get("TELEGRAM_API_TOKEN")
+from django.conf import settings
+from django.core.management.base import BaseCommand
+from santabot.models import User
 
 
 # Enable logging
@@ -154,7 +153,7 @@ def done(update: Update, context: CallbackContext) -> int:
 def main() -> None:
     """Run the bot."""
     # Create the Updater and pass it your bot's token.
-    updater = Updater(tg_api_token)
+    updater = Updater(settings.TELEGRAM_API_TOKEN)
 
     # Get the dispatcher to register handlers
     dispatcher = updater.dispatcher
@@ -215,6 +214,8 @@ def main() -> None:
     # start_polling() is non-blocking and will stop the bot gracefully.
     updater.idle()
 
+class Command(BaseCommand):
+    help = 'Телеграм-бот'
 
-if __name__ == '__main__':
-    main()
+    def handle(self, *args, **options):
+        main()
