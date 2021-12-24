@@ -1,17 +1,15 @@
 #!/usr/bin/env python
 # pylint: disable=C0116,W0613
 import logging
+from datetime import datetime
 from typing import Dict
-
-from telegram import (InlineKeyboardButton, InlineKeyboardMarkup,
-                      ReplyKeyboardMarkup, ReplyKeyboardRemove, Update)
-from telegram.ext import (CallbackContext, CommandHandler, ConversationHandler,
-                          Filters, MessageHandler, Updater)
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from santabot.models import User
-from santabot.models import Event
+from santabot.models import Event, User
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
+from telegram.ext import (CallbackContext, CommandHandler, ConversationHandler,
+                          Filters, MessageHandler, Updater)
 
 # Enable logging
 logging.basicConfig(
@@ -35,6 +33,18 @@ reply_keyboard = [
     ['Выход']
 ]
 
+reply_date_end = [
+    ['до 25.12.2021', 'до 31.12.2021'],
+    ['Выход']
+]
+dates_ends = dict(zip(
+    reply_date_end[0],
+    [
+        datetime.strptime('25.12.2021 12:00:00', '%d.%m.%Y %H:%M:%S'),
+        datetime.strptime('25.12.2021 12:00:00', '%d.%m.%Y %H:%M:%S'),
+    ]
+))
+
 reply_yes_no = [
     ['Да', 'Нет'],
     ['Выход']
@@ -43,11 +53,6 @@ reply_yes_no = [
 reply_costs = [
     ['до 500 рублей', '500-1000 рублей'],
     ['1000-2000 рублей', 'Выход']
-]
-
-reply_date_end = [
-    ['до 25.12.2021', 'до 31.12.2021'],
-    ['Выход']
 ]
 
 markup = ReplyKeyboardMarkup(
@@ -101,7 +106,6 @@ def cost_limits(update: Update, context: CallbackContext) -> int:
 
 def set_cost(update: Update, context: CallbackContext) -> int:
     """Set cost."""
-
     update.message.reply_text(
         f'Выберите ценовой диапазон:',
         reply_markup= ReplyKeyboardMarkup(
@@ -109,7 +113,6 @@ def set_cost(update: Update, context: CallbackContext) -> int:
             one_time_keyboard=True
         )
     )
-
     return DATE_REG_ENDS
 
 
@@ -128,18 +131,25 @@ def choose_date_reg(update: Update, context: CallbackContext) -> int:
     return DATE_SEND
 
 
+def incorrect_date(update: Update, context: CallbackContext) -> int:
+    update.message.reply_text(
+        'Пожалуйста, введите дату в формате "дд.мм.гггг: 31.12.2021"'
+    )
+    return BYE_MESSAGE
+
+
 def choose_date_send(update: Update, context: CallbackContext) -> int:
     """Choose send date."""
     text = update.message.text
-    context.user_data['last_register_date'] = text
-    # TODO:
-    #   Изменить формат last_register_date на Datetime.
+    end_reg_date = dates_ends[text]
+    context.user_data['last_register_date'] = end_reg_date
 
     update.message.reply_text(
-        f'Дата отправки подарка:',
+        'Дата отправки подарка:',
         reply_markup= ReplyKeyboardMarkup(
             reply_date_end,
-            one_time_keyboard=True
+            one_time_keyboard=True,
+            input_field_placeholder='дд.мм.гггг',
         )
     )
     return BYE_MESSAGE
@@ -148,9 +158,8 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
 def bye_message(update: Update, context: CallbackContext) -> int:
     """Send bye message."""
     text = update.message.text
-    context.user_data['sending_date'] = text
-    # TODO:
-    #   Изменить формат sending_date на Datetime.
+    date_time_obj = datetime.strptime(f'{text} 12:00:00', '%d.%m.%Y %H:%M:%S'),
+    context.user_data['sending_date'] = date_time_obj
 
     context.user_data['event'] = Event.objects.create(
         name=context.user_data['game_name'],
@@ -226,13 +235,14 @@ def main() -> None:
                 MessageHandler(
                     Filters.text & ~(Filters.command | Filters.regex('^Выход$')),
                     choose_date_send,
-                )
+                ),
             ],
             BYE_MESSAGE: [
-                MessageHandler(
-                    Filters.text & ~(Filters.command | Filters.regex('^Выход$')),
+                    MessageHandler(
+                    Filters.regex('^(0?[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.20\d{2}$'),
                     bye_message,
-                )
+                ),
+                MessageHandler(Filters.text, incorrect_date),
             ],
         },
         fallbacks=[MessageHandler(Filters.regex('^Выход$'), done)],
