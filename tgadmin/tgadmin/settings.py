@@ -10,13 +10,13 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
-import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+from environs import Env
 
 
-load_dotenv()
+env = Env()
+env.read_env()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -31,7 +31,7 @@ SECRET_KEY = 'django-insecure-(_@o01&s!#v#i#0d@12&hu8-!+)&ox*xkeylp3#()t@*#(gf9q
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 
 
 # Application definition
@@ -120,4 +120,4 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Bot settings
 
-TELEGRAM_API_TOKEN = os.environ.get("TELEGRAM_API_TOKEN")
+TELEGRAM_API_TOKEN = env.str("TELEGRAM_API_TOKEN")

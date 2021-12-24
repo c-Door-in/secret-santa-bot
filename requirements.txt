@@ -1,3 +1,4 @@
 django==4.0
 python-telegram-bot==13.9
 python-dotenv==0.19.2
+environs==9.3.*
