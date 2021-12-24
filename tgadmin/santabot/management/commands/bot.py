@@ -138,6 +138,13 @@ def incorrect_date(update: Update, context: CallbackContext) -> int:
     return BYE_MESSAGE
 
 
+def incorrect_date_before(update: Update, context: CallbackContext) -> int:
+    update.message.reply_text(
+        f'Пожалуйста, введите дату не ранее {context.user_data["last_register_date"]}'
+    )
+    return BYE_MESSAGE
+
+
 def choose_date_send(update: Update, context: CallbackContext) -> int:
     """Choose send date."""
     text = update.message.text
@@ -158,7 +165,10 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
 def bye_message(update: Update, context: CallbackContext) -> int:
     """Send bye message."""
     text = update.message.text
-    date_time_obj = datetime.strptime(f'{text} 12:00:00', '%d.%m.%Y %H:%M:%S'),
+    date_time_obj = datetime.strptime(f'{text} 00:00:00', '%d.%m.%Y %H:%M:%S')
+    if date_time_obj < context.user_data['last_register_date']:
+        return incorrect_date_before(update, context)
+
     context.user_data['sending_date'] = date_time_obj
 
     context.user_data['event'] = Event.objects.create(
