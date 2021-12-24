@@ -33,10 +33,10 @@ class Event(models.Model):
         verbose_name='Ценовой диапозон',
         blank=True,
     )
-    last_register_date = models.TextField(
+    last_register_date = models.DateTimeField(
         verbose_name='Последний день регистрации',
     )
-    sending_date = models.TextField(
+    sending_date = models.DateTimeField(
         verbose_name='Дата отправки подарка',
     )
 
