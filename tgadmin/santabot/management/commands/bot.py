@@ -41,7 +41,7 @@ dates_ends = dict(zip(
     reply_date_end[0],
     [
         datetime.strptime('25.12.2021 12:00:00', '%d.%m.%Y %H:%M:%S'),
-        datetime.strptime('25.12.2021 12:00:00', '%d.%m.%Y %H:%M:%S'),
+        datetime.strptime('31.12.2021 12:00:00', '%d.%m.%Y %H:%M:%S'),
     ]
 ))
 
@@ -154,7 +154,7 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         'Дата отправки подарка:',
         reply_markup= ReplyKeyboardMarkup(
-            reply_date_end,
+            [['Выход',]],
             one_time_keyboard=True,
             input_field_placeholder='дд.мм.гггг',
         )
