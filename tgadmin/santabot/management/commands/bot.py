@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # pylint: disable=C0116,W0613
-from datetime import datetime
 import logging
-from typing import Dict
+from datetime import datetime
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -31,26 +30,6 @@ logger = logging.getLogger(__name__)
     BYE_MESSAGE,
 ) = range(8)
 
-reply_keyboard = [
-    ['Создать игру'],
-    ['Выход']
-]
-
-reply_date_end = [
-    ['до 25.12.2021', 'до 31.12.2021'],
-    ['Выход']
-]
-
-reply_yes_no = [
-    ['Да', 'Нет'],
-    ['Выход']
-]
-
-reply_costs = [
-    ['до 500 рублей', '500-1000 рублей'],
-    ['1000-2000 рублей', 'Выход']
-]
-
 
 def start(update: Update, context: CallbackContext) -> int:
     """Start the conversation and ask user for input."""
@@ -62,9 +41,11 @@ def start(update: Update, context: CallbackContext) -> int:
     )
 
     update.message.reply_text(
-        "Организуй тайный обмен подарками, запусти праздничное настроение!",
+        'Организуй тайный обмен подарками, запусти праздничное настроение!',
         reply_markup=ReplyKeyboardMarkup(
-            reply_keyboard,
+            keyboard=[
+                ['Создать игру'], ['Выход']
+            ],
             one_time_keyboard=True,
             resize_keyboard=True,
         ),
@@ -75,7 +56,12 @@ def start(update: Update, context: CallbackContext) -> int:
 def enter_game_name(update: Update, context: CallbackContext) -> int:
     """Enter game name."""
     update.message.reply_text(
-        "Название:",
+        'Название:',
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[['Выход']],
+            one_time_keyboard=True,
+            resize_keyboard=True,
+        )
     )
     return COST_LIMITS
 
@@ -93,7 +79,10 @@ def cost_limits(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         f'Ограничение стоимости подарка: да/нет?',
         reply_markup= ReplyKeyboardMarkup(
-            reply_yes_no,
+            keyboard=[
+                ['Да', 'Нет'],
+                ['Назад', 'Выход']
+            ],
             one_time_keyboard=True,
             resize_keyboard=True,
         )
@@ -102,11 +91,14 @@ def cost_limits(update: Update, context: CallbackContext) -> int:
 
 
 def set_cost(update: Update, context: CallbackContext) -> int:
-    """Set cost."""
+    """Set gift's cost limitation."""
     update.message.reply_text(
         f'Выберите ценовой диапазон:',
-        reply_markup= ReplyKeyboardMarkup(
-            reply_costs,
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[
+                ['до 500 рублей', '500-1000 рублей'],
+                ['1000-2000 рублей', 'Назад', 'Выход']
+            ],
             one_time_keyboard=True,
             resize_keyboard=True,
         )
@@ -115,14 +107,14 @@ def set_cost(update: Update, context: CallbackContext) -> int:
 
 
 def choose_date_reg(update: Update, context: CallbackContext) -> int:
-    """Choose reg date ends."""
+    """Choose end of registration."""
     text = update.message.text
     context.user_data['cost_range'] = text
 
     update.message.reply_text(
         f'Период регистрации участников:',
         reply_markup=ReplyKeyboardMarkup(
-            [['Выход']],
+            keyboard=[['Назад', 'Выход']],
             one_time_keyboard=True,
             resize_keyboard=True,
             input_field_placeholder='дд.мм.гггг',
@@ -133,35 +125,38 @@ def choose_date_reg(update: Update, context: CallbackContext) -> int:
 
 def incorrect_date(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
-        'Пожалуйста, введите дату в формате "дд.мм.гггг: 31.12.2021"'
+        'Пожалуйста, введите дату в формате "дд.мм.гггг: 15.12.2021"'
     )
     return BYE_MESSAGE
 
 
 def incorrect_date_send(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
-        'Пожалуйста, введите дату в формате "дд.мм.гггг: 31.12.2021"'
+        'Пожалуйста, введите дату в формате "дд.мм.гггг: 15.12.2021"'
     )
     return DATE_SEND
 
 
 def incorrect_confirm_date(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
-        'Пожалуйста, введите дату в формате "дд.мм.гггг: 31.12.2021"'
+        'Пожалуйста, введите дату в формате "дд.мм.гггг: 15.12.2021"'
     )
     return CONFIRM_DATA
 
 
 def incorrect_date_after(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
-        f'Пожалуйста, введите еще не прошедшую дату.'
+        'Пожалуйста, введите еще не прошедшую дату.'
     )
     return DATE_SEND
 
 
 def incorrect_date_before(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
-        f'Пожалуйста, введите дату не ранее {context.user_data["last_register_date"]}'
+        (
+            'Пожалуйста, введите дату не ранее'
+            f' {context.user_data["last_register_date"]}'
+        )
     )
     return CONFIRM_DATA
 
@@ -185,7 +180,7 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         'Дата отправки подарка:',
         reply_markup= ReplyKeyboardMarkup(
-            [['Выход',]],
+            keyboard=[['Назад', 'Выход',]],
             one_time_keyboard=True,
             resize_keyboard=True,
             input_field_placeholder='дд.мм.гггг',
@@ -217,7 +212,10 @@ def confirm_data(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         message,
         reply_markup= ReplyKeyboardMarkup(
-            [['Создать игру', 'Выход']],
+            keyboard=[
+                ['Создать игру'],
+                ['Назад', 'Выход']
+            ],
             one_time_keyboard=True,
             resize_keyboard=True,
         )
@@ -240,8 +238,15 @@ def bye_message(update: Update, context: CallbackContext) -> int:
     game_id = context.user_data['event'].pk
     print(f'GAME_ID - {game_id}')
 
-    update.message.reply_text('Отлично, Тайный Санта уже готовится к раздаче подарков!')
-    update.message.reply_text('А здесь должна быть реферальная ссылка.')
+    update.message.reply_text(
+        'Отлично, Тайный Санта уже готовится к раздаче подарков!',
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    update.message.reply_text(
+        'А здесь должна быть реферальная ссылка.'
+    )
+
+    context.user_data.clear()
 
     return ConversationHandler.END
 
@@ -251,7 +256,7 @@ def done(update: Update, context: CallbackContext) -> int:
     user_data = context.user_data
 
     update.message.reply_text(
-        f"Вы отменили ввод данных",
+        f'Вы отменили ввод данных',
         reply_markup=ReplyKeyboardRemove(),
     )
     user_data.clear()
@@ -267,7 +272,7 @@ def main() -> None:
     # Get the dispatcher to register handlers
     dispatcher = updater.dispatcher
 
-    # Add conversation handler with the states CHOOSING, TYPING_CHOICE and TYPING_REPLY
+    # Add conversation handler with the states
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
