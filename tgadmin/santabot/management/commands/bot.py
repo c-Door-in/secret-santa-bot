@@ -2,10 +2,10 @@
 # pylint: disable=C0116,W0613
 import logging
 from datetime import datetime
-from typing import Text
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
+from pytz import timezone
 from santabot.models import Event, User
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import (CallbackContext, CommandHandler, ConversationHandler,
@@ -207,8 +207,10 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
     # а дату окончания регистрации не нужно трогать.
     if 'sending_date' not in context.user_data:
         text = update.message.text
-        end_reg_date = datetime_from_str(text)
-        if end_reg_date < datetime.now():
+        end_reg_date = datetime_from_str(date_str=text, time_str='12:00:00')
+        # TODO: вынести?
+        loctz = timezone('Europe/Moscow')
+        if end_reg_date < loctz.localize(datetime.now()):
             return incorrect_date_after(update, context)
 
         context.user_data['last_register_date'] = end_reg_date
@@ -237,11 +239,13 @@ def confirm_data(update: Update, context: CallbackContext) -> int:
     # т.е. если прилетели не по кнопке "Назад".
     if 'is_all_collected' not in context.user_data:
         text = update.message.text
-        date_time_obj = datetime_from_str(text)
-        if date_time_obj < context.user_data['last_register_date']:
+        sending_date_time_obj = datetime_from_str(
+            date_str=text, time_str='12:00:00'
+        )
+        if sending_date_time_obj < context.user_data['last_register_date']:
             return incorrect_date_before(update, context)
 
-        context.user_data['sending_date'] = date_time_obj
+        context.user_data['sending_date'] = sending_date_time_obj
         context.user_data['is_all_collected'] = True  # already collected flag
 
     # вывод всех данных для подтверждения
