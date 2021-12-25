@@ -51,10 +51,6 @@ reply_costs = [
     ['1000-2000 рублей', 'Выход']
 ]
 
-markup = ReplyKeyboardMarkup(
-    reply_keyboard,
-    one_time_keyboard=True
-)
 
 def start(update: Update, context: CallbackContext) -> int:
     """Start the conversation and ask user for input."""
@@ -67,7 +63,11 @@ def start(update: Update, context: CallbackContext) -> int:
 
     update.message.reply_text(
         "Организуй тайный обмен подарками, запусти праздничное настроение!",
-        reply_markup=markup,
+        reply_markup=ReplyKeyboardMarkup(
+            reply_keyboard,
+            one_time_keyboard=True,
+            resize_keyboard=True,
+        ),
     )
     return ENTER_GAME_NAME
 
@@ -94,7 +94,8 @@ def cost_limits(update: Update, context: CallbackContext) -> int:
         f'Ограничение стоимости подарка: да/нет?',
         reply_markup= ReplyKeyboardMarkup(
             reply_yes_no,
-            one_time_keyboard=True
+            one_time_keyboard=True,
+            resize_keyboard=True,
         )
     )
     return CHOOSE_COST
@@ -106,7 +107,8 @@ def set_cost(update: Update, context: CallbackContext) -> int:
         f'Выберите ценовой диапазон:',
         reply_markup= ReplyKeyboardMarkup(
             reply_costs,
-            one_time_keyboard=True
+            one_time_keyboard=True,
+            resize_keyboard=True,
         )
     )
     return DATE_REG_ENDS
@@ -122,6 +124,7 @@ def choose_date_reg(update: Update, context: CallbackContext) -> int:
         reply_markup=ReplyKeyboardMarkup(
             [['Выход']],
             one_time_keyboard=True,
+            resize_keyboard=True,
             input_field_placeholder='дд.мм.гггг',
         )
     )
@@ -184,6 +187,7 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
         reply_markup= ReplyKeyboardMarkup(
             [['Выход',]],
             one_time_keyboard=True,
+            resize_keyboard=True,
             input_field_placeholder='дд.мм.гггг',
         )
     )
@@ -215,6 +219,7 @@ def confirm_data(update: Update, context: CallbackContext) -> int:
         reply_markup= ReplyKeyboardMarkup(
             [['Создать игру', 'Выход']],
             one_time_keyboard=True,
+            resize_keyboard=True,
         )
     )
 
