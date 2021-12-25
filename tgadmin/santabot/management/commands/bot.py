@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 def start(update: Update, context: CallbackContext) -> int:
     """Start the conversation and ask user for input."""
+
     context.user_data['user_profile'], _ = User.objects.get_or_create(
         external_id=update.message.from_user.id,
         defaults={
@@ -55,6 +56,10 @@ def start(update: Update, context: CallbackContext) -> int:
 
 def enter_game_name(update: Update, context: CallbackContext) -> int:
     """Enter game name."""
+
+    if 'cost_limits' in context.user_data:
+        del context.user_data['cost_limits']
+
     update.message.reply_text(
         'Название:',
         reply_markup=ReplyKeyboardMarkup(
@@ -67,17 +72,21 @@ def enter_game_name(update: Update, context: CallbackContext) -> int:
 
 
 def cost_limits(update: Update, context: CallbackContext) -> int:
-    """Ask the user for info about the selected predefined choice."""
-    text = update.message.text
-    context.user_data['game_name'] = text
+    """Save game name and ask costs limits."""
 
-    if Event.objects.filter(name=text):
-        update.message.reply_text('Такое имя уже используется.')
-        update.message.reply_text('Название:')
-        return COST_LIMITS
+    if 'cost_range' in context.user_data:
+        del context.user_data['cost_range']
+
+    if 'cost_limits' not in context.user_data:
+        text = update.message.text
+        context.user_data['game_name'] = text
+
+        if Event.objects.filter(name=text):
+            update.message.reply_text('Такое имя уже используется.')
+            return enter_game_name(update, context)
 
     update.message.reply_text(
-        f'Ограничение стоимости подарка: да/нет?',
+        'Ограничение стоимости подарка: да/нет?',
         reply_markup= ReplyKeyboardMarkup(
             keyboard=[
                 ['Да', 'Нет'],
@@ -87,17 +96,26 @@ def cost_limits(update: Update, context: CallbackContext) -> int:
             resize_keyboard=True,
         )
     )
+    # искусственный флаг,
+    # нужен чтобы понять были ли на этом этапе,
+    # в случае возврата по кнопке "Назад"
+    context.user_data['cost_limits'] = True
+
     return CHOOSE_COST
 
 
 def set_cost(update: Update, context: CallbackContext) -> int:
-    """Set gift's cost limitation."""
+    """Set cost choosing flag and ask costs limits."""
+
+    if 'last_register_date' in context.user_data:
+        del context.user_data['last_register_date']
+
     update.message.reply_text(
-        f'Выберите ценовой диапазон:',
+        'Выберите ценовой диапазон:',
         reply_markup=ReplyKeyboardMarkup(
             keyboard=[
-                ['до 500 рублей', '500-1000 рублей'],
-                ['1000-2000 рублей', 'Назад', 'Отмена']
+                ['до 500 рублей', '500-1000 рублей', '1000-2000 рублей'],
+                ['Назад', 'Отмена']
             ],
             one_time_keyboard=True,
             resize_keyboard=True,
@@ -108,11 +126,18 @@ def set_cost(update: Update, context: CallbackContext) -> int:
 
 def choose_date_reg(update: Update, context: CallbackContext) -> int:
     """Choose end of registration."""
-    text = update.message.text
-    context.user_data['cost_range'] = text
+
+    if 'sending_date' in context.user_data:
+        del context.user_data['sending_date']
+
+    # обновлять только если прилетело
+    # с предыдущего а не с последующего
+    if 'last_register_date' not in context.user_data:
+        text = update.message.text
+        context.user_data['cost_range'] = text
 
     update.message.reply_text(
-        f'Период регистрации участников:',
+        'Период регистрации участников:',
         reply_markup=ReplyKeyboardMarkup(
             keyboard=[['Назад', 'Отмена']],
             one_time_keyboard=True,
@@ -170,12 +195,23 @@ def incorrect_confirm(update: Update, context: CallbackContext) -> int:
 
 def choose_date_send(update: Update, context: CallbackContext) -> int:
     """Choose send date."""
-    text = update.message.text
-    end_reg_date = datetime_from_str(text)
-    if end_reg_date < datetime.now():
-        return incorrect_date_after(update, context)
+    # если следующего нет, значит прилетели с данными правильными (дата)
+    # от предыдущего,
+    # если же он есть - то прилетели без данных, и вообще не за этим.
+    # т.е. если прилетели назад менять дату отправки,
+    # а дату окончания регистрации не нужно трогать.
+    if 'sending_date' not in context.user_data:
+        text = update.message.text
+        end_reg_date = datetime_from_str(text)
+        if end_reg_date < datetime.now():
+            return incorrect_date_after(update, context)
 
-    context.user_data['last_register_date'] = end_reg_date
+        context.user_data['last_register_date'] = end_reg_date
+
+    # если попали сюда по кнопке "Назад",
+    # то не все данные собраны и флаг надо убать
+    if 'is_all_collected' in context.user_data:
+        del context.user_data['is_all_collected']
 
     update.message.reply_text(
         'Дата отправки подарка:',
@@ -191,23 +227,26 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
 
 def confirm_data(update: Update, context: CallbackContext) -> int:
     """Requesting confirmation entered data by user."""
-    # сначала обработка даты отправки подарков
-    if 'is_collected' not in context.user_data:
+    # сначала обработка даты отправки подарков,
+    # если еще не было наполнения,
+    # т.е. если прилетели не по кнопке "Назад".
+    if 'is_all_collected' not in context.user_data:
         text = update.message.text
         date_time_obj = datetime_from_str(text)
         if date_time_obj < context.user_data['last_register_date']:
             return incorrect_date_before(update, context)
 
         context.user_data['sending_date'] = date_time_obj
-        context.user_data['is_collected'] = True  # already collected flag
+        context.user_data['is_all_collected'] = True  # already collected flag
 
     # вывод всех данных для подтверждения
-    message = ('Вы ввели:\n'
+    message = ('Вы ввели:\n\n'
+
         f'Название игры: {context.user_data["game_name"]}\n'
         f'Ваше имя: {context.user_data["user_profile"]}\n'
         f'Ограничение цены подарка: {context.user_data["cost_range"]}\n'
         f'Дата окончания регистрации: {context.user_data["last_register_date"]}\n'
-        f'Дата отправки подарка: {context.user_data["sending_date"]}\n'
+        f'Дата отправки подарка: {context.user_data["sending_date"]}\n\n'
 
         f'Создать игру с этими данными?\n'
     )
@@ -228,7 +267,6 @@ def confirm_data(update: Update, context: CallbackContext) -> int:
 
 def bye_message(update: Update, context: CallbackContext) -> int:
     """Save collected data in DB and send bye message."""
-
     context.user_data['event'] = Event.objects.create(
         name=context.user_data['game_name'],
         creator=context.user_data['user_profile'],
@@ -280,17 +318,17 @@ def main() -> None:
         states={
             ENTER_GAME_NAME: [
                 MessageHandler(
-                    Filters.text & ~(Filters.command | Filters.regex('^Отмена$')),
+                    Filters.text & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Отмена$')),
                     enter_game_name
-                )
+                ),
             ],
             COST_LIMITS: [
                 MessageHandler(
-                    Filters.text & ~(Filters.command | Filters.regex('^Отмена$')),
+                    Filters.text & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Отмена$')),
                     cost_limits
                 ),
                 MessageHandler(
-                    Filters.regex('^Назад$'), enter_game_name
+                    Filters.regex('^Назад$'), start
                 )
             ],
             CHOOSE_COST: [
@@ -300,11 +338,17 @@ def main() -> None:
                 MessageHandler(
                     Filters.regex('^Нет$'), choose_date_reg
                 ),
+                MessageHandler(
+                    Filters.regex('^Назад$'), enter_game_name
+                )
             ],
             DATE_REG_ENDS: [
                 MessageHandler(
-                    Filters.text & ~(Filters.command | Filters.regex('^Отмена$')),
+                    Filters.text & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Отмена$')),
                     choose_date_reg,
+                ),
+                MessageHandler(
+                    Filters.regex('^Назад$'), cost_limits
                 )
             ],
             DATE_SEND: [
@@ -313,9 +357,12 @@ def main() -> None:
                     choose_date_send,
                 ),
                 MessageHandler(
-                    Filters.text & ~(Filters.command | Filters.regex('^Отмена$')),
+                    Filters.text & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Отмена$')),
                     incorrect_date_send
                 ),
+                MessageHandler(
+                    Filters.regex('^Назад$'), cost_limits
+                )
             ],
             CONFIRM_DATA: [
                     MessageHandler(
@@ -323,15 +370,27 @@ def main() -> None:
                     confirm_data,
                 ),
                 MessageHandler(
-                    Filters.text & ~(Filters.command | Filters.regex('^Отмена$')),
-                    incorrect_confirm_date),
+                    Filters.text & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Отмена$')),
+                    incorrect_confirm_date
+                ),
+                MessageHandler(
+                    Filters.regex('^Назад$'),
+                    choose_date_reg
+                )
             ],
             BYE_MESSAGE: [
-                    MessageHandler(
-                    Filters.regex('^Подтвердить$'),
+                MessageHandler(
+                    Filters.regex('^Подтвердить$') & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Отмена$')),
                     bye_message,
                 ),
-                MessageHandler(Filters.text, incorrect_confirm),
+                MessageHandler(
+                    Filters.regex('^Назад$'),
+                    choose_date_send
+                ),
+                MessageHandler(
+                    Filters.text & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Отмена$')),
+                    incorrect_confirm
+                ),
             ],
         },
         fallbacks=[MessageHandler(Filters.regex('^Отмена$'), done)],
