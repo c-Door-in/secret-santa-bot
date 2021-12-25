@@ -27,8 +27,9 @@ logger = logging.getLogger(__name__)
     ENTER_COSTS,
     DATE_REG_ENDS,
     DATE_SEND,
+    CONFIRM_DATA,
     BYE_MESSAGE,
-) = range(7)
+) = range(8)
 
 reply_keyboard = [
     ['Создать игру'],
@@ -141,6 +142,13 @@ def incorrect_date_send(update: Update, context: CallbackContext) -> int:
     return DATE_SEND
 
 
+def incorrect_confirm_date(update: Update, context: CallbackContext) -> int:
+    update.message.reply_text(
+        'Пожалуйста, введите дату в формате "дд.мм.гггг: 31.12.2021"'
+    )
+    return CONFIRM_DATA
+
+
 def incorrect_date_after(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         f'Пожалуйста, введите еще не прошедшую дату.'
@@ -151,6 +159,13 @@ def incorrect_date_after(update: Update, context: CallbackContext) -> int:
 def incorrect_date_before(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         f'Пожалуйста, введите дату не ранее {context.user_data["last_register_date"]}'
+    )
+    return CONFIRM_DATA
+
+
+def incorrect_confirm(update: Update, context: CallbackContext) -> int:
+    update.message.reply_text(
+        f'Я вас не понял, введите "Создать игру" или "Выход".'
     )
     return BYE_MESSAGE
 
@@ -172,17 +187,42 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
             input_field_placeholder='дд.мм.гггг',
         )
     )
+    return CONFIRM_DATA
+
+
+def confirm_data(update: Update, context: CallbackContext) -> int:
+    """Requesting confirmation entered data by user."""
+    # сначала обработка даты отправки подарков
+    if 'is_collected' not in context.user_data:
+        text = update.message.text
+        date_time_obj = datetime_from_str(text)
+        if date_time_obj < context.user_data['last_register_date']:
+            return incorrect_date_before(update, context)
+
+        context.user_data['sending_date'] = date_time_obj
+        context.user_data['is_collected'] = True  # already collected flag
+
+    # вывод всех данных для подтверждения
+    message = ('Вы ввели:\n'
+        f'Название игры: {context.user_data["game_name"]}\n'
+        f'Ваше имя: {context.user_data["user_profile"]}\n'
+        f'Ограничение цены подарка: {context.user_data["cost_range"]}\n'
+        f'Дата окончания регистрации: {context.user_data["last_register_date"]}\n'
+        f'Дата отправки подарка: {context.user_data["sending_date"]}\n'
+    )
+    update.message.reply_text(
+        message,
+        reply_markup= ReplyKeyboardMarkup(
+            [['Создать игру', 'Выход']],
+            one_time_keyboard=True,
+        )
+    )
+
     return BYE_MESSAGE
 
 
 def bye_message(update: Update, context: CallbackContext) -> int:
-    """Send bye message."""
-    text = update.message.text
-    date_time_obj = datetime_from_str(text)
-    if date_time_obj < context.user_data['last_register_date']:
-        return incorrect_date_before(update, context)
-
-    context.user_data['sending_date'] = date_time_obj
+    """Save collected data in DB and send bye message."""
 
     context.user_data['event'] = Event.objects.create(
         name=context.user_data['game_name'],
@@ -191,10 +231,10 @@ def bye_message(update: Update, context: CallbackContext) -> int:
         last_register_date=context.user_data['last_register_date'],
         sending_date=context.user_data['sending_date'],
     )
-    print(context.user_data)
-
+    print(f'{context.user_data=}')
     game_id = context.user_data['event'].pk
     print(f'GAME_ID - {game_id}')
+
     update.message.reply_text('Отлично, Тайный Санта уже готовится к раздаче подарков!')
     update.message.reply_text('А здесь должна быть реферальная ссылка.')
 
@@ -202,17 +242,15 @@ def bye_message(update: Update, context: CallbackContext) -> int:
 
 
 def done(update: Update, context: CallbackContext) -> int:
-    """Display the gathered info and end the conversation."""
+    """End conversation."""
     user_data = context.user_data
-    if 'choice' in user_data:
-        del user_data['choice']
 
     update.message.reply_text(
         f"Вы отменили ввод данных",
         reply_markup=ReplyKeyboardRemove(),
     )
-
     user_data.clear()
+
     return ConversationHandler.END
 
 
@@ -261,12 +299,19 @@ def main() -> None:
                 ),
                 MessageHandler(Filters.text, incorrect_date_send),
             ],
-            BYE_MESSAGE: [
+            CONFIRM_DATA: [
                     MessageHandler(
                     Filters.regex('^(0?[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.20\d{2}$'),
+                    confirm_data,
+                ),
+                MessageHandler(Filters.text, incorrect_confirm_date),
+            ],
+            BYE_MESSAGE: [
+                    MessageHandler(
+                    Filters.regex('^Создать игру$'),
                     bye_message,
                 ),
-                MessageHandler(Filters.text, incorrect_date),
+                MessageHandler(Filters.text, incorrect_confirm),
             ],
         },
         fallbacks=[MessageHandler(Filters.regex('^Выход$'), done)],
