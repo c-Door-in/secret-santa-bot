@@ -2,10 +2,10 @@ from django.db import models
 
 class User(models.Model):
     external_id = models.PositiveIntegerField(
-        verbose_name='User ID',
+        verbose_name='ID',
     )
     name = models.TextField(
-        verbose_name='User name',
+        verbose_name='TG Nickname',
     )
 
     def __str__(self):
@@ -46,3 +46,48 @@ class Event(models.Model):
     class Meta:
         verbose_name = 'Игра'
         verbose_name_plural = 'Игры'
+
+
+class Participant(models.Model):
+    event = models.ForeignKey(
+        to='santabot.Event',
+        verbose_name='Игра',
+        on_delete=models.PROTECT,
+    )
+    user = models.ForeignKey(
+        to='santabot.User',
+        verbose_name='Имя участника',
+        on_delete=models.PROTECT,
+    )
+    phone_number = models.TextField(
+        verbose_name='Номер телефона'
+    )
+    letter_for_santa = models.TextField(
+        verbose_name='Письмо Санте',
+        blank=True,
+    )
+
+    def __str__(self):
+        return f'{self.user} - игра {self.event}'
+
+    class Meta:
+        verbose_name = 'Участник'
+        verbose_name_plural = 'Участники'
+
+
+class Interests(models.Model):
+    participant = models.ForeignKey(
+        to='santabot.Participant',
+        verbose_name='Участник',
+        on_delete=models.PROTECT,
+    )
+    interest = models.TextField(
+        verbose_name='Интерес',
+    )
+
+    def __str__(self):
+        return f'{self.interest}'
+
+    class Meta:
+        verbose_name = 'Интерес'
+        verbose_name_plural = 'Интересы'
