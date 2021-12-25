@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # pylint: disable=C0116,W0613
+from datetime import datetime
 import logging
 from typing import Dict
 
@@ -117,9 +118,10 @@ def choose_date_reg(update: Update, context: CallbackContext) -> int:
 
     update.message.reply_text(
         f'Период регистрации участников:',
-        reply_markup= ReplyKeyboardMarkup(
-            reply_date_end,
-            one_time_keyboard=True
+        reply_markup=ReplyKeyboardMarkup(
+            [['Выход']],
+            one_time_keyboard=True,
+            input_field_placeholder='дд.мм.гггг',
         )
     )
     return DATE_SEND
@@ -130,6 +132,20 @@ def incorrect_date(update: Update, context: CallbackContext) -> int:
         'Пожалуйста, введите дату в формате "дд.мм.гггг: 31.12.2021"'
     )
     return BYE_MESSAGE
+
+
+def incorrect_date_send(update: Update, context: CallbackContext) -> int:
+    update.message.reply_text(
+        'Пожалуйста, введите дату в формате "дд.мм.гггг: 31.12.2021"'
+    )
+    return DATE_SEND
+
+
+def incorrect_date_after(update: Update, context: CallbackContext) -> int:
+    update.message.reply_text(
+        f'Пожалуйста, введите еще не прошедшую дату.'
+    )
+    return DATE_SEND
 
 
 def incorrect_date_before(update: Update, context: CallbackContext) -> int:
@@ -143,6 +159,9 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
     """Choose send date."""
     text = update.message.text
     end_reg_date = datetime_from_str(text)
+    if end_reg_date < datetime.now():
+        return incorrect_date_after(update, context)
+
     context.user_data['last_register_date'] = end_reg_date
 
     update.message.reply_text(
@@ -237,9 +256,10 @@ def main() -> None:
             ],
             DATE_SEND: [
                 MessageHandler(
-                    Filters.text & ~(Filters.command | Filters.regex('^Выход$')),
+                    Filters.regex('^(0?[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.20\d{2}$'),
                     choose_date_send,
                 ),
+                MessageHandler(Filters.text, incorrect_date_send),
             ],
             BYE_MESSAGE: [
                     MessageHandler(
