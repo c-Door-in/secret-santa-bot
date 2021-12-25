@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # pylint: disable=C0116,W0613
 import logging
-from datetime import datetime
 from typing import Dict
 
 from django.conf import settings
@@ -10,6 +9,8 @@ from santabot.models import Event, User
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import (CallbackContext, CommandHandler, ConversationHandler,
                           Filters, MessageHandler, Updater)
+
+from .bot_utils import datetime_from_str
 
 # Enable logging
 logging.basicConfig(
@@ -37,13 +38,6 @@ reply_date_end = [
     ['до 25.12.2021', 'до 31.12.2021'],
     ['Выход']
 ]
-dates_ends = dict(zip(
-    reply_date_end[0],
-    [
-        datetime.strptime('25.12.2021 12:00:00', '%d.%m.%Y %H:%M:%S'),
-        datetime.strptime('31.12.2021 12:00:00', '%d.%m.%Y %H:%M:%S'),
-    ]
-))
 
 reply_yes_no = [
     ['Да', 'Нет'],
@@ -148,7 +142,7 @@ def incorrect_date_before(update: Update, context: CallbackContext) -> int:
 def choose_date_send(update: Update, context: CallbackContext) -> int:
     """Choose send date."""
     text = update.message.text
-    end_reg_date = dates_ends[text]
+    end_reg_date = datetime_from_str(text)
     context.user_data['last_register_date'] = end_reg_date
 
     update.message.reply_text(
@@ -165,7 +159,7 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
 def bye_message(update: Update, context: CallbackContext) -> int:
     """Send bye message."""
     text = update.message.text
-    date_time_obj = datetime.strptime(f'{text} 00:00:00', '%d.%m.%Y %H:%M:%S')
+    date_time_obj = datetime_from_str(text)
     if date_time_obj < context.user_data['last_register_date']:
         return incorrect_date_before(update, context)
 
