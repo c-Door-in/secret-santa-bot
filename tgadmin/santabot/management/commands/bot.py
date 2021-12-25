@@ -44,7 +44,7 @@ def start(update: Update, context: CallbackContext) -> int:
         'Организуй тайный обмен подарками, запусти праздничное настроение!',
         reply_markup=ReplyKeyboardMarkup(
             keyboard=[
-                ['Создать игру'], ['Выход']
+                ['Создать игру'], ['Отмена']
             ],
             one_time_keyboard=True,
             resize_keyboard=True,
@@ -58,7 +58,7 @@ def enter_game_name(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         'Название:',
         reply_markup=ReplyKeyboardMarkup(
-            keyboard=[['Выход']],
+            keyboard=[['Отмена']],
             one_time_keyboard=True,
             resize_keyboard=True,
         )
@@ -81,7 +81,7 @@ def cost_limits(update: Update, context: CallbackContext) -> int:
         reply_markup= ReplyKeyboardMarkup(
             keyboard=[
                 ['Да', 'Нет'],
-                ['Назад', 'Выход']
+                ['Назад', 'Отмена']
             ],
             one_time_keyboard=True,
             resize_keyboard=True,
@@ -97,7 +97,7 @@ def set_cost(update: Update, context: CallbackContext) -> int:
         reply_markup=ReplyKeyboardMarkup(
             keyboard=[
                 ['до 500 рублей', '500-1000 рублей'],
-                ['1000-2000 рублей', 'Назад', 'Выход']
+                ['1000-2000 рублей', 'Назад', 'Отмена']
             ],
             one_time_keyboard=True,
             resize_keyboard=True,
@@ -114,7 +114,7 @@ def choose_date_reg(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         f'Период регистрации участников:',
         reply_markup=ReplyKeyboardMarkup(
-            keyboard=[['Назад', 'Выход']],
+            keyboard=[['Назад', 'Отмена']],
             one_time_keyboard=True,
             resize_keyboard=True,
             input_field_placeholder='дд.мм.гггг',
@@ -163,7 +163,7 @@ def incorrect_date_before(update: Update, context: CallbackContext) -> int:
 
 def incorrect_confirm(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
-        f'Я вас не понял, введите "Создать игру" или "Выход".'
+        f'Я вас не понял, введите "Создать игру" или "Отмена".'
     )
     return BYE_MESSAGE
 
@@ -180,7 +180,7 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         'Дата отправки подарка:',
         reply_markup= ReplyKeyboardMarkup(
-            keyboard=[['Назад', 'Выход',]],
+            keyboard=[['Назад', 'Отмена',]],
             one_time_keyboard=True,
             resize_keyboard=True,
             input_field_placeholder='дд.мм.гггг',
@@ -208,13 +208,15 @@ def confirm_data(update: Update, context: CallbackContext) -> int:
         f'Ограничение цены подарка: {context.user_data["cost_range"]}\n'
         f'Дата окончания регистрации: {context.user_data["last_register_date"]}\n'
         f'Дата отправки подарка: {context.user_data["sending_date"]}\n'
+
+        f'Создать игру с этими данными?\n'
     )
     update.message.reply_text(
         message,
         reply_markup= ReplyKeyboardMarkup(
             keyboard=[
-                ['Создать игру'],
-                ['Назад', 'Выход']
+                ['Подтвердить'],
+                ['Назад', 'Отмена']
             ],
             one_time_keyboard=True,
             resize_keyboard=True,
@@ -278,14 +280,17 @@ def main() -> None:
         states={
             ENTER_GAME_NAME: [
                 MessageHandler(
-                    Filters.text & ~(Filters.command | Filters.regex('^Выход$')),
+                    Filters.text & ~(Filters.command | Filters.regex('^Отмена$')),
                     enter_game_name
                 )
             ],
             COST_LIMITS: [
                 MessageHandler(
-                    Filters.text & ~(Filters.command | Filters.regex('^Выход$')),
+                    Filters.text & ~(Filters.command | Filters.regex('^Отмена$')),
                     cost_limits
+                ),
+                MessageHandler(
+                    Filters.regex('^Назад$'), enter_game_name
                 )
             ],
             CHOOSE_COST: [
@@ -298,7 +303,7 @@ def main() -> None:
             ],
             DATE_REG_ENDS: [
                 MessageHandler(
-                    Filters.text & ~(Filters.command | Filters.regex('^Выход$')),
+                    Filters.text & ~(Filters.command | Filters.regex('^Отмена$')),
                     choose_date_reg,
                 )
             ],
@@ -307,24 +312,29 @@ def main() -> None:
                     Filters.regex('^(0?[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.20\d{2}$'),
                     choose_date_send,
                 ),
-                MessageHandler(Filters.text, incorrect_date_send),
+                MessageHandler(
+                    Filters.text & ~(Filters.command | Filters.regex('^Отмена$')),
+                    incorrect_date_send
+                ),
             ],
             CONFIRM_DATA: [
                     MessageHandler(
                     Filters.regex('^(0?[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.20\d{2}$'),
                     confirm_data,
                 ),
-                MessageHandler(Filters.text, incorrect_confirm_date),
+                MessageHandler(
+                    Filters.text & ~(Filters.command | Filters.regex('^Отмена$')),
+                    incorrect_confirm_date),
             ],
             BYE_MESSAGE: [
                     MessageHandler(
-                    Filters.regex('^Создать игру$'),
+                    Filters.regex('^Подтвердить$'),
                     bye_message,
                 ),
                 MessageHandler(Filters.text, incorrect_confirm),
             ],
         },
-        fallbacks=[MessageHandler(Filters.regex('^Выход$'), done)],
+        fallbacks=[MessageHandler(Filters.regex('^Отмена$'), done)],
     )
 
     dispatcher.add_handler(conv_handler)
