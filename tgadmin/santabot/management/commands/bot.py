@@ -173,6 +173,10 @@ def set_cost(update: Update, context: CallbackContext) -> int:
             resize_keyboard=True,
         )
     )
+
+    context.user_data['error_message'] = 'Я вас не понимаю, выберите один из вариантов.'
+    context.user_data['next_state'] = DATE_REG_ENDS
+
     return DATE_REG_ENDS
 
 
@@ -461,7 +465,7 @@ def main() -> None:
             ],
             DATE_REG_ENDS: [
                 MessageHandler(
-                    Filters.text & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Меню$')),
+                    Filters.regex('^до 500 рублей|500-1000 рублей|1000-2000 рублей$') & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Меню$')),
                     choose_date_reg,
                 ),
                 MessageHandler(
@@ -469,6 +473,10 @@ def main() -> None:
                 ),
                 MessageHandler(
                     Filters.regex('^Меню$'), start
+                ),
+                MessageHandler(
+                    Filters.text,
+                    incorrect_input
                 )
             ],
             DATE_SEND: [
