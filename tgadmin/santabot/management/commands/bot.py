@@ -11,7 +11,7 @@ from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, message
 from telegram.ext import (CallbackContext, CommandHandler, ConversationHandler,
                           Filters, MessageHandler, Updater)
 
-from santabot.models import Event, User
+from santabot.models import Event, Participant, User
 from .bot_utils import datetime_from_str
 
 # Enable logging
@@ -23,8 +23,13 @@ logger = logging.getLogger(__name__)
 
 (
     MAIN_MENU,
-    ENTER_GAME_NAME,
     JOIN_GAME,
+    MY_GAMES,
+    CREATED_GAMES,
+    JOINED_GAMES,
+) = range(5)
+(
+    ENTER_GAME_NAME,
     COST_LIMITS,
     CHOOSE_COST,
     ENTER_COSTS,
@@ -32,7 +37,7 @@ logger = logging.getLogger(__name__)
     DATE_SEND,
     CONFIRM_DATA,
     SAVE_DATA,
-) = range(10)
+) = range(5, 13)
 
 
 def start(update: Update, context: CallbackContext) -> int:
@@ -86,6 +91,72 @@ def foo(update: Update, context: CallbackContext) -> int:
     )
 
     return MAIN_MENU
+
+
+def my_games(update: Update, context: CallbackContext) -> int:
+    """List menu of my games categories."""
+
+    user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
+
+    update.message.reply_text(
+        'Выберите пункт.',
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[
+                ['Игры, которые я создал', 'Игры, где я участник'],
+                ['Меню']
+            ],
+            one_time_keyboard=True,
+            resize_keyboard=True,
+        ),
+    )
+
+    return MY_GAMES
+
+
+def list_games(update: Update, context: CallbackContext) -> int:
+    """List my games created or joined."""
+
+    user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
+
+    if update.message.text == 'Игры, которые я создал':
+        msg = 'Здесь список созданных игр.\n\n'
+        tg_id = update.message.from_user.id
+        created_games = [
+            event.name for event in Event.objects.filter(creator__external_id=tg_id)
+        ]
+        msg += '\n'.join(created_games)
+
+    if update.message.text == 'Игры, где я участник':
+        tg_id = update.message.from_user.id
+        user = User.objects.get(external_id=tg_id)
+        joined_games = [
+            participant.event.name for participant in
+            Participant.objects.filter(user=user)
+        ]
+        msg = 'Здесь список игр в которых участвую(-ал).\n\n'
+        msg += '\n'.join(joined_games)
+
+
+    update.message.reply_text(
+        msg,
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[
+                ['Назад', 'Меню']
+            ],
+            one_time_keyboard=True,
+            resize_keyboard=True,
+        ),
+    )
+
+    return MY_GAMES
 
 
 def enter_game_name(update: Update, context: CallbackContext) -> int:
@@ -418,14 +489,13 @@ def main() -> None:
                     Filters.regex('^Меню$'), start
                 ),
                 MessageHandler(
-                    Filters.regex('^Создать игру$'),
-                    enter_game_name
+                    Filters.regex('^Создать игру$'), enter_game_name
                 ),
                 MessageHandler(
                     Filters.regex('^Вступить в игру$'), foo, # !
                 ),
                 MessageHandler(
-                    Filters.regex('^Мои игры$'), foo, # !
+                    Filters.regex('^Мои игры$'), my_games
                 ),
                 MessageHandler(
                     Filters.text & ~(Filters.regex('^Выход$') | Filters.command),
@@ -437,6 +507,24 @@ def main() -> None:
             #         Filters.regex('^Вступить в игру$'), start, # !
             #     )
             # ],
+            MY_GAMES: [
+                MessageHandler(
+                    Filters.regex('^Игры, которые я создал$'), list_games,
+                ),
+                MessageHandler(
+                    Filters.regex('^Игры, где я участник$'), list_games,
+                ),
+                MessageHandler(
+                    Filters.regex('^Назад$'), my_games
+                ),
+                MessageHandler(
+                    Filters.regex('^Меню$'), start
+                )
+                # MessageHandler(
+                #     Filters.text & ~(Filters.regex('^Меню$') | Filters.command),
+                #     incorrect_input
+                # )
+            ],
             COST_LIMITS: [
                 MessageHandler(
                     Filters.text & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Меню$')),
