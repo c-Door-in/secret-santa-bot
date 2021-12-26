@@ -2,11 +2,12 @@
 # pylint: disable=C0116,W0613
 import logging
 from datetime import datetime
+import re
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from pytz import timezone
-from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, message
 from telegram.ext import (CallbackContext, CommandHandler, ConversationHandler,
                           Filters, MessageHandler, Updater)
 
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 (
     MAIN_MENU,
     ENTER_GAME_NAME,
+    JOIN_GAME,
     COST_LIMITS,
     CHOOSE_COST,
     ENTER_COSTS,
@@ -30,7 +32,7 @@ logger = logging.getLogger(__name__)
     DATE_SEND,
     CONFIRM_DATA,
     SAVE_DATA,
-) = range(9)
+) = range(10)
 
 
 def start(update: Update, context: CallbackContext) -> int:
@@ -61,7 +63,29 @@ def start(update: Update, context: CallbackContext) -> int:
             resize_keyboard=True,
         ),
     )
-    return ENTER_GAME_NAME
+    # на случай ошибок ввода
+    context.user_data['error_message'] = 'Я вас не понимаю, выберите один из вариантов.'
+    context.user_data['next_state'] = MAIN_MENU
+
+    return MAIN_MENU
+
+
+def foo(update: Update, context: CallbackContext) -> int:
+    """Dumb foo func."""
+    # TODO: временная заглушка
+    update.message.reply_text(
+        'Временно недоступно',
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[
+                ['Создать игру', 'Вступить в игру', 'Мои игры'],
+                ['Выход']
+            ],
+            one_time_keyboard=True,
+            resize_keyboard=True,
+        ),
+    )
+
+    return MAIN_MENU
 
 
 def enter_game_name(update: Update, context: CallbackContext) -> int:
@@ -182,85 +206,20 @@ def choose_date_reg(update: Update, context: CallbackContext) -> int:
     return DATE_SEND
 
 
-def incorrect_date(update: Update, context: CallbackContext) -> int:
-    user = context.user_data
+def incorrect_input(update: Update, context: CallbackContext) -> int:
+    """Send error message and go to next state."""
+
+    user_data = context.user_data
     logger.info(
-        'user %s: %s', user['user_profile'], update.message.text
+        'user %s: %s', user_data['user_profile'], update.message.text
     )
-    logger.info('user data: %s', user)
+    logger.info('user data: %s', user_data)
 
-    update.message.reply_text(
-        'Пожалуйста, введите дату в формате "дд.мм.гггг: 15.12.2021"'
-    )
-    return SAVE_DATA
+    message = user_data['error_message']
+    next_state = user_data['next_state']
 
-
-def incorrect_date_send(update: Update, context: CallbackContext) -> int:
-    user = context.user_data
-    logger.info(
-        'user %s: %s', user['user_profile'], update.message.text
-    )
-    logger.info('user data: %s', user)
-
-    update.message.reply_text(
-        'Пожалуйста, введите дату в формате "дд.мм.гггг: 15.12.2021"'
-    )
-    return DATE_SEND
-
-
-def incorrect_confirm_date(update: Update, context: CallbackContext) -> int:
-    user = context.user_data
-    logger.info(
-        'user %s: %s', user['user_profile'], update.message.text
-    )
-    logger.info('user data: %s', user)
-
-    update.message.reply_text(
-        'Пожалуйста, введите дату в формате "дд.мм.гггг: 15.12.2021"'
-    )
-    return CONFIRM_DATA
-
-
-def incorrect_date_after(update: Update, context: CallbackContext) -> int:
-    user = context.user_data
-    logger.info(
-        'user %s: %s', user['user_profile'], update.message.text
-    )
-    logger.info('user data: %s', user)
-
-    update.message.reply_text(
-        'Пожалуйста, введите еще не прошедшую дату.'
-    )
-    return DATE_SEND
-
-
-def incorrect_date_before(update: Update, context: CallbackContext) -> int:
-    user = context.user_data
-    logger.info(
-        'user %s: %s', user['user_profile'], update.message.text
-    )
-    logger.info('user data: %s', user)
-
-    update.message.reply_text(
-        (
-            'Пожалуйста, введите дату не ранее'
-            f' {context.user_data["last_register_date"]}'
-        )
-    )
-    return CONFIRM_DATA
-
-
-def incorrect_confirm(update: Update, context: CallbackContext) -> int:
-    user = context.user_data
-    logger.info(
-        'user %s: %s', user['user_profile'], update.message.text
-    )
-    logger.info('user data: %s', user)
-
-    update.message.reply_text(
-        'Я вас не понял, введите "Создать игру" или "Меню".'
-    )
-    return SAVE_DATA
+    update.message.reply_text(message)
+    return next_state
 
 
 def choose_date_send(update: Update, context: CallbackContext) -> int:
@@ -279,11 +238,23 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
     # а дату окончания регистрации не нужно трогать.
     if 'sending_date' not in user_data:
         text = update.message.text
+
+        res = re.search('^(0?[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.20\d{2}$', text)
+        if res is None:
+            msg = (
+                'Пожалуйста, введите дату в формате "дд.мм.гггг: 15.12.2021"'
+            )
+            user_data['error_message'] = msg
+            user_data['next_state'] = DATE_SEND
+            return incorrect_input(update, context)
+
         end_reg_date = datetime_from_str(date_str=text, time_str='12:00:00')
         # TODO: вынести?
         loctz = timezone('Europe/Moscow')
         if end_reg_date < loctz.localize(datetime.now()):
-            return incorrect_date_after(update, context)
+            user_data['error_message'] = 'Пожалуйста, введите еще не прошедшую дату.'
+            user_data['next_state'] = DATE_SEND
+            return incorrect_input(update, context)
 
         user_data['last_register_date'] = end_reg_date
 
@@ -318,11 +289,26 @@ def confirm_data(update: Update, context: CallbackContext) -> int:
     # т.е. если прилетели не по кнопке "Назад".
     if 'is_all_collected' not in user_data:
         text = update.message.text
+        res = re.search('^(0?[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.20\d{2}$', text)
+        if res is None:
+            msg = (
+                'Пожалуйста, введите дату в формате "дд.мм.гггг: 15.12.2021"'
+            )
+            user_data['error_message'] = msg
+            user_data['next_state'] = CONFIRM_DATA
+            return incorrect_input(update, context)
+
         sending_date_time_obj = datetime_from_str(
             date_str=text, time_str='12:00:00'
         )
         if sending_date_time_obj < user_data['last_register_date']:
-            return incorrect_date_before(update, context)
+            msg = (
+                'Пожалуйста, введите дату не ранее'
+                f' {context.user_data["last_register_date"]}'
+            )
+            user_data['error_message'] = msg
+            user_data['next_state'] = CONFIRM_DATA
+            return incorrect_input(update, context)
 
         user_data['sending_date'] = sending_date_time_obj
         user_data['is_all_collected'] = True  # flag for already collected all data 
@@ -349,6 +335,9 @@ def confirm_data(update: Update, context: CallbackContext) -> int:
             resize_keyboard=True,
         )
     )
+
+    context.user_data['error_message'] = 'Я вас не понимаю, выберите один из вариантов.'
+    context.user_data['next_state'] = SAVE_DATA
 
     return SAVE_DATA
 
@@ -423,20 +412,27 @@ def main() -> None:
             MAIN_MENU: [
                 MessageHandler(
                     Filters.regex('^Меню$'), start
-                )
-            ],
-            ENTER_GAME_NAME: [
+                ),
                 MessageHandler(
                     Filters.regex('^Создать игру$'),
                     enter_game_name
                 ),
                 MessageHandler(
-                    Filters.regex('^Вступить в игру$'), start
+                    Filters.regex('^Вступить в игру$'), foo, # !
                 ),
                 MessageHandler(
-                    Filters.regex('^Мои игры$'), start
+                    Filters.regex('^Мои игры$'), foo, # !
+                ),
+                MessageHandler(
+                    Filters.text & ~(Filters.regex('^Выход$') | Filters.command),
+                    incorrect_input
                 )
             ],
+            # JOIN_GAME: [
+            #     MessageHandler(
+            #         Filters.regex('^Вступить в игру$'), start, # !
+            #     )
+            # ],
             COST_LIMITS: [
                 MessageHandler(
                     Filters.text & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Меню$')),
@@ -477,28 +473,20 @@ def main() -> None:
             ],
             DATE_SEND: [
                 MessageHandler(
-                    Filters.regex('^(0?[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.20\d{2}$'),
-                    choose_date_send,
-                ),
-                MessageHandler(
                     Filters.text & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Меню$')),
-                    incorrect_date_send
+                    choose_date_send
                 ),
                 MessageHandler(
                     Filters.regex('^Назад$'), cost_limits
                 ),
                 MessageHandler(
                     Filters.regex('^Меню$'), start
-                )
+                ),
             ],
             CONFIRM_DATA: [
-                    MessageHandler(
-                    Filters.regex('^(0?[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.20\d{2}$'),
-                    confirm_data,
-                ),
                 MessageHandler(
                     Filters.text & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Меню$')),
-                    incorrect_confirm_date
+                    confirm_data
                 ),
                 MessageHandler(
                     Filters.regex('^Назад$'),
@@ -506,7 +494,7 @@ def main() -> None:
                 ),
                 MessageHandler(
                     Filters.regex('^Меню$'), start
-                )
+                ),
             ],
             SAVE_DATA: [
                 MessageHandler(
@@ -518,12 +506,12 @@ def main() -> None:
                     choose_date_send
                 ),
                 MessageHandler(
-                    Filters.text & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Меню$')),
-                    incorrect_confirm
+                    Filters.regex('^Меню$'), start
                 ),
                 MessageHandler(
-                    Filters.regex('^Меню$'), start
-                )
+                    Filters.text,
+                    incorrect_input
+                ),
             ],
         },
         fallbacks=[MessageHandler(Filters.regex('^Выход$'), done)],
