@@ -6,16 +6,16 @@ from datetime import datetime
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from pytz import timezone
-from santabot.models import Event, User
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import (CallbackContext, CommandHandler, ConversationHandler,
                           Filters, MessageHandler, Updater)
 
+from santabot.models import Event, User
 from .bot_utils import datetime_from_str
 
 # Enable logging
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
+    format='%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s', level=logging.INFO
 )
 
 logger = logging.getLogger(__name__)
@@ -29,16 +29,21 @@ logger = logging.getLogger(__name__)
     DATE_REG_ENDS,
     DATE_SEND,
     CONFIRM_DATA,
-    BYE_MESSAGE,
+    SAVE_DATA,
 ) = range(9)
 
 
 def start(update: Update, context: CallbackContext) -> int:
     """Start the conversation and ask user for input."""
 
-    context.user_data.clear()
+    # context.user_data.clear() #!!!
+    user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
 
-    context.user_data['user_profile'], _ = User.objects.get_or_create(
+    user_data['user_profile'], _ = User.objects.get_or_create(
         external_id=update.message.from_user.id,
         defaults={
             'name': update.message.from_user.name,
@@ -62,8 +67,14 @@ def start(update: Update, context: CallbackContext) -> int:
 def enter_game_name(update: Update, context: CallbackContext) -> int:
     """Enter game name."""
 
-    if 'cost_limits' in context.user_data:
-        del context.user_data['cost_limits']
+    user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
+
+    if 'pass_cost_limits' in user_data:
+        del user_data['pass_cost_limits']
 
     update.message.reply_text(
         'Название:',
@@ -79,12 +90,18 @@ def enter_game_name(update: Update, context: CallbackContext) -> int:
 def cost_limits(update: Update, context: CallbackContext) -> int:
     """Save game name and ask costs limits."""
 
-    if 'cost_range' in context.user_data:
-        del context.user_data['cost_range']
+    user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
 
-    if 'cost_limits' not in context.user_data:
+    if 'cost_range' in user_data:
+        del user_data['cost_range']
+
+    if 'pass_cost_limits' not in user_data:
         text = update.message.text
-        context.user_data['game_name'] = text
+        user_data['game_name'] = text
 
         if Event.objects.filter(name=text):
             update.message.reply_text('Такое имя уже используется.')
@@ -104,7 +121,7 @@ def cost_limits(update: Update, context: CallbackContext) -> int:
     # искусственный флаг,
     # нужен чтобы понять были ли на этом этапе,
     # в случае возврата по кнопке "Назад"
-    context.user_data['cost_limits'] = True
+    user_data['pass_cost_limits'] = True
 
     return CHOOSE_COST
 
@@ -112,8 +129,14 @@ def cost_limits(update: Update, context: CallbackContext) -> int:
 def set_cost(update: Update, context: CallbackContext) -> int:
     """Set cost choosing flag and ask costs limits."""
 
-    if 'last_register_date' in context.user_data:
-        del context.user_data['last_register_date']
+    user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
+
+    if 'last_register_date' in user_data:
+        del user_data['last_register_date']
 
     update.message.reply_text(
         'Выберите ценовой диапазон:',
@@ -132,14 +155,20 @@ def set_cost(update: Update, context: CallbackContext) -> int:
 def choose_date_reg(update: Update, context: CallbackContext) -> int:
     """Choose end of registration."""
 
-    if 'sending_date' in context.user_data:
-        del context.user_data['sending_date']
+    user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
+
+    if 'sending_date' in user_data:
+        del user_data['sending_date']
 
     # обновлять только если прилетело
     # с предыдущего а не с последующего
-    if 'last_register_date' not in context.user_data:
+    if 'last_register_date' not in user_data:
         text = update.message.text
-        context.user_data['cost_range'] = text
+        user_data['cost_range'] = text
 
     update.message.reply_text(
         'Период регистрации участников:',
@@ -154,13 +183,25 @@ def choose_date_reg(update: Update, context: CallbackContext) -> int:
 
 
 def incorrect_date(update: Update, context: CallbackContext) -> int:
+    user = context.user_data
+    logger.info(
+        'user %s: %s', user['user_profile'], update.message.text
+    )
+    logger.info('user data: %s', user)
+
     update.message.reply_text(
         'Пожалуйста, введите дату в формате "дд.мм.гггг: 15.12.2021"'
     )
-    return BYE_MESSAGE
+    return SAVE_DATA
 
 
 def incorrect_date_send(update: Update, context: CallbackContext) -> int:
+    user = context.user_data
+    logger.info(
+        'user %s: %s', user['user_profile'], update.message.text
+    )
+    logger.info('user data: %s', user)
+
     update.message.reply_text(
         'Пожалуйста, введите дату в формате "дд.мм.гггг: 15.12.2021"'
     )
@@ -168,6 +209,12 @@ def incorrect_date_send(update: Update, context: CallbackContext) -> int:
 
 
 def incorrect_confirm_date(update: Update, context: CallbackContext) -> int:
+    user = context.user_data
+    logger.info(
+        'user %s: %s', user['user_profile'], update.message.text
+    )
+    logger.info('user data: %s', user)
+
     update.message.reply_text(
         'Пожалуйста, введите дату в формате "дд.мм.гггг: 15.12.2021"'
     )
@@ -175,6 +222,12 @@ def incorrect_confirm_date(update: Update, context: CallbackContext) -> int:
 
 
 def incorrect_date_after(update: Update, context: CallbackContext) -> int:
+    user = context.user_data
+    logger.info(
+        'user %s: %s', user['user_profile'], update.message.text
+    )
+    logger.info('user data: %s', user)
+
     update.message.reply_text(
         'Пожалуйста, введите еще не прошедшую дату.'
     )
@@ -182,6 +235,12 @@ def incorrect_date_after(update: Update, context: CallbackContext) -> int:
 
 
 def incorrect_date_before(update: Update, context: CallbackContext) -> int:
+    user = context.user_data
+    logger.info(
+        'user %s: %s', user['user_profile'], update.message.text
+    )
+    logger.info('user data: %s', user)
+
     update.message.reply_text(
         (
             'Пожалуйста, введите дату не ранее'
@@ -192,20 +251,33 @@ def incorrect_date_before(update: Update, context: CallbackContext) -> int:
 
 
 def incorrect_confirm(update: Update, context: CallbackContext) -> int:
+    user = context.user_data
+    logger.info(
+        'user %s: %s', user['user_profile'], update.message.text
+    )
+    logger.info('user data: %s', user)
+
     update.message.reply_text(
         'Я вас не понял, введите "Создать игру" или "Меню".'
     )
-    return BYE_MESSAGE
+    return SAVE_DATA
 
 
 def choose_date_send(update: Update, context: CallbackContext) -> int:
     """Choose send date."""
+
+    user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
+
     # если следующего нет, значит прилетели с данными правильными (дата)
     # от предыдущего,
     # если же он есть - то прилетели без данных, и вообще не за этим.
     # т.е. если прилетели назад менять дату отправки,
     # а дату окончания регистрации не нужно трогать.
-    if 'sending_date' not in context.user_data:
+    if 'sending_date' not in user_data:
         text = update.message.text
         end_reg_date = datetime_from_str(date_str=text, time_str='12:00:00')
         # TODO: вынести?
@@ -213,12 +285,12 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
         if end_reg_date < loctz.localize(datetime.now()):
             return incorrect_date_after(update, context)
 
-        context.user_data['last_register_date'] = end_reg_date
+        user_data['last_register_date'] = end_reg_date
 
     # если попали сюда по кнопке "Назад",
     # то не все данные собраны и флаг надо убать
-    if 'is_all_collected' in context.user_data:
-        del context.user_data['is_all_collected']
+    if 'is_all_collected' in user_data:
+        del user_data['is_all_collected']
 
     update.message.reply_text(
         'Дата отправки подарка:',
@@ -234,28 +306,35 @@ def choose_date_send(update: Update, context: CallbackContext) -> int:
 
 def confirm_data(update: Update, context: CallbackContext) -> int:
     """Requesting confirmation entered data by user."""
+
+    user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
+
     # сначала обработка даты отправки подарков,
     # если еще не было наполнения,
     # т.е. если прилетели не по кнопке "Назад".
-    if 'is_all_collected' not in context.user_data:
+    if 'is_all_collected' not in user_data:
         text = update.message.text
         sending_date_time_obj = datetime_from_str(
             date_str=text, time_str='12:00:00'
         )
-        if sending_date_time_obj < context.user_data['last_register_date']:
+        if sending_date_time_obj < user_data['last_register_date']:
             return incorrect_date_before(update, context)
 
-        context.user_data['sending_date'] = sending_date_time_obj
-        context.user_data['is_all_collected'] = True  # already collected flag
+        user_data['sending_date'] = sending_date_time_obj
+        user_data['is_all_collected'] = True  # flag for already collected all data 
 
     # вывод всех данных для подтверждения
     message = ('Вы ввели:\n\n'
 
-        f'Название игры: {context.user_data["game_name"]}\n'
-        f'Ваше имя: {context.user_data["user_profile"]}\n'
-        f'Ограничение цены подарка: {context.user_data["cost_range"]}\n'
-        f'Дата окончания регистрации: {context.user_data["last_register_date"]}\n'
-        f'Дата отправки подарка: {context.user_data["sending_date"]}\n\n'
+        f'Название игры: {user_data["game_name"]}\n'
+        f'Ваш id и ник: {user_data["user_profile"]}\n'
+        f'Ограничение цены подарка: {user_data["cost_range"]}\n'
+        f'Дата окончания регистрации: {user_data["last_register_date"]}\n'
+        f'Дата отправки подарка: {user_data["sending_date"]}\n\n'
 
         'Создать игру с этими данными?\n'
     )
@@ -271,26 +350,31 @@ def confirm_data(update: Update, context: CallbackContext) -> int:
         )
     )
 
-    return BYE_MESSAGE
+    return SAVE_DATA
 
 
-def bye_message(update: Update, context: CallbackContext) -> int:
-    """Save collected data in DB and send bye message."""
+def save_data(update: Update, context: CallbackContext) -> int:
+    """Save collected data in DB and send message."""
 
-    context.user_data['event'] = Event.objects.create(
-        name=context.user_data['game_name'],
-        creator=context.user_data['user_profile'],
-        cost_range=context.user_data['cost_range'],
-        last_register_date=context.user_data['last_register_date'],
-        sending_date=context.user_data['sending_date'],
+    user_data = context.user_data
+
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
     )
-    print(f'{context.user_data=}')
-    game_id = context.user_data['event'].pk
-    print(f'GAME_ID - {game_id}')
+    logger.info('user data: %s', user_data)
+
+    user_data['event'] = Event.objects.create(
+        name=user_data['game_name'],
+        creator=user_data['user_profile'],
+        cost_range=user_data['cost_range'],
+        last_register_date=user_data['last_register_date'],
+        sending_date=user_data['sending_date'],
+    )
+
+    logger.info('Game created in DB, GAME_ID: %s', user_data['event'].pk)
 
     update.message.reply_text(
         'Отлично, Тайный Санта уже готовится к раздаче подарков!',
-        # reply_markup=ReplyKeyboardRemove(),
     )
     update.message.reply_text(
         'А здесь должна быть реферальная ссылка.',
@@ -300,14 +384,20 @@ def bye_message(update: Update, context: CallbackContext) -> int:
             one_time_keyboard=True,
         )
     )
-    context.user_data.clear()
+
+    user_data.clear()
 
     return MAIN_MENU
 
 
 def done(update: Update, context: CallbackContext) -> int:
     """End conversation."""
+
     user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
 
     update.message.reply_text(
         'До свидания!',
@@ -418,10 +508,10 @@ def main() -> None:
                     Filters.regex('^Меню$'), start
                 )
             ],
-            BYE_MESSAGE: [
+            SAVE_DATA: [
                 MessageHandler(
                     Filters.regex('^Подтвердить$') & ~(Filters.command | Filters.regex('^Назад$') | Filters.regex('^Меню$')),
-                    bye_message,
+                    save_data,
                 ),
                 MessageHandler(
                     Filters.regex('^Назад$'),
