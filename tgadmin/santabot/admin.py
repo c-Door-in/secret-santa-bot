@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db.models import fields
 
 from .models import User
 from .models import Event
@@ -26,15 +27,15 @@ class EventAdmin(admin.ModelAdmin):
 
 @admin.register(Participant)
 class ParticipantAdmin(admin.ModelAdmin):
-    list_display = (
-        'id',
+    fields = (
         'event',
         'user',
         'phone_number',
         'letter_for_santa',
+        'interests',
     )
 
 
 @admin.register(Interests)
 class InterestsAdmin(admin.ModelAdmin):
-    list_display = ('id', 'participant', 'interest')
+    list_display = ('id', 'interest')

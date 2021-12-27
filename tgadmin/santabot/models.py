@@ -17,7 +17,8 @@ class User(models.Model):
 
 
 class Event(models.Model):
-    name = models.TextField(
+    name = models.CharField(
+        max_length=39,
         verbose_name='Название игры',
     )
     creator = models.ForeignKey(
@@ -29,7 +30,8 @@ class Event(models.Model):
         verbose_name='Время создания',
         auto_now_add=True,
     )
-    cost_range = models.TextField(
+    cost_range = models.CharField(
+        max_length=30,
         verbose_name='Ценовой диапозон',
         blank=True,
     )
@@ -48,41 +50,11 @@ class Event(models.Model):
         verbose_name_plural = 'Игры'
 
 
-class Participant(models.Model):
-    event = models.ForeignKey(
-        to='santabot.Event',
-        verbose_name='Игра',
-        on_delete=models.PROTECT,
-    )
-    user = models.ForeignKey(
-        to='santabot.User',
-        verbose_name='Имя участника',
-        on_delete=models.PROTECT,
-    )
-    phone_number = models.TextField(
-        verbose_name='Номер телефона'
-    )
-    letter_for_santa = models.TextField(
-        verbose_name='Письмо Санте',
-        blank=True,
-    )
-
-    def __str__(self):
-        return f'{self.user} - игра {self.event}'
-
-    class Meta:
-        verbose_name = 'Участник'
-        verbose_name_plural = 'Участники'
-
-
 class Interests(models.Model):
-    participant = models.ForeignKey(
-        to='santabot.Participant',
-        verbose_name='Участник',
-        on_delete=models.PROTECT,
-    )
-    interest = models.TextField(
+    interest = models.CharField(
+        max_length=30,
         verbose_name='Интерес',
+        unique=True,
     )
 
     def __str__(self):
@@ -91,3 +63,35 @@ class Interests(models.Model):
     class Meta:
         verbose_name = 'Интерес'
         verbose_name_plural = 'Интересы'
+
+
+class Participant(models.Model):
+    event = models.ForeignKey(
+        to='santabot.Event',
+        verbose_name='Игра',
+        on_delete=models.CASCADE,
+    )
+    user = models.ForeignKey(
+        to='santabot.User',
+        verbose_name='Имя участника',
+        on_delete=models.CASCADE,
+    )
+    phone_number = models.CharField(
+        max_length=30,
+        verbose_name='Номер телефона'
+    )
+    letter_for_santa = models.TextField(
+        verbose_name='Письмо Санте',
+        blank=True,
+    )
+    interests = models.ManyToManyField(
+        Interests,
+        verbose_name='Интересы',
+    )
+
+    def __str__(self):
+        return f'{self.user} - игра {self.event}'
+
+    class Meta:
+        verbose_name = 'Участник'
+        verbose_name_plural = 'Участники'
