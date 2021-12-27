@@ -1,4 +1,5 @@
 import re
+from random import shuffle
 from datetime import datetime
 from pytz import timezone
 
@@ -22,3 +23,13 @@ def datetime_from_str(date_str='', time_str='00:00:00'):
             '%d.%m.%Y %H:%M:%S'
         )
     )
+
+
+def choose_random_pairs(players):
+    pairs = {}
+    shuffle(players)
+    for id, player in enumerate(players):
+        if id == (len(players) - 1):
+            pairs[player] = players[0]
+            return pairs
+        pairs[player] = players[id+1]
