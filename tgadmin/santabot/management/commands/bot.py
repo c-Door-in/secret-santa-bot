@@ -38,6 +38,13 @@ logger = logging.getLogger(__name__)
     CONFIRM_DATA,
     SAVE_DATA,
 ) = range(5, 13)
+(
+    USERNAME,
+    PHONE_NUMBER,
+    INTERESTS,
+    SANTA_LETTER,
+    BYE
+) = range(13, 18)
 
 
 def start(update: Update, context: CallbackContext) -> int:
@@ -472,6 +479,106 @@ def done(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
+def start_game(update: Update, context: CallbackContext):
+    user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
+    # event = Event.objects.get(pk=game_id) После того, как узнаем ID ключа.
+    # Подставить в welcome_message значения: event.name, event.cost_range, event.last_register, event.sending_date
+
+    welcome_message = 'Замечательно, ты собираешься участвовать в игре.\n'\
+        'Имя игры: %ИМЯ_ИГРЫ%\n'\
+        'Ограничение стоимости подарка: %СТОИМОСТЬ_ПОДАРКА%\n'\
+        'Период регистрации: %ПЕРИОД_РЕГИСТРАЦИИ%\n'\
+        'Дата отправки подарка: %ДАТА_ОТПРАВКИ_ПОДАРКА%\n'
+    update.message.reply_text(welcome_message)
+    update.message.reply_text('Введи своё имя:' ,
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[
+                [f'{update._effective_chat.first_name}'],
+            ],
+            one_time_keyboard=True,
+            resize_keyboard=True,
+        ),
+    )
+
+    return PHONE_NUMBER
+
+
+def get_phone_number(update: Update, context: CallbackContext):
+    user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
+    user_name = update.message.text
+    context.user_data['user_name'] = user_name
+    update.message.reply_text('Введите ваш номер телефона в формате (+79999999999):',
+        reply_markup=ReplyKeyboardRemove(),
+    )
+
+    return INTERESTS
+
+
+def get_interests(update: Update, context: CallbackContext):
+    user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
+
+    phone_number = update.message.text
+    context.user_data['phone_number'] = phone_number
+    update.message.reply_text('Интересы:',
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[
+                ['Спорт', 'Образование', 'Медицина', 'Путешествия', 'Книги', 'Подписки'],
+            ],
+            one_time_keyboard=True,
+            resize_keyboard=True,
+        ),
+    )
+
+    return SANTA_LETTER
+
+
+def get_santa_letter(update: Update, context: CallbackContext):
+    user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
+    interests = update.message.text
+    context.user_data['interests'] = interests
+    update.message.reply_text('Напиши мини-письмо Санте:',
+        reply_markup=ReplyKeyboardRemove(),
+    )
+
+    return BYE
+
+
+def good_bye_message(update: Update, context: CallbackContext):
+    user_data = context.user_data
+    logger.info(
+        'user %s: %s', update.message.from_user.name, update.message.text
+    )
+    logger.info('user data: %s', user_data)
+    santa_letter = update.message.text
+    context.user_data['santa_letter'] = santa_letter
+    info_message = f'Имя пользователя: {user_data["user_name"]}\nВаш номер телефона: {user_data["phone_number"]}\n'\
+        f'Ваши интересы: {user_data["interests"]}\n'
+    update.message.reply_text(info_message)
+    update.message.reply_text(f'Письмо Санте: {user_data["santa_letter"]}')
+    bye_message = f'Превосходно, ты в игре!\n31.12.2021 мы проведем жеребьевку и ты узнаешь имя'\
+        ' и контакты своего тайного друга. Ему и нужно будет подарить подарок!'
+    update.message.reply_text(bye_message)
+    user_data.clear()
+
+    return ConversationHandler.END
+
+
 def main() -> None:
     """Run the bot."""
     # Create the Updater and pass it your bot's token.
@@ -482,7 +589,7 @@ def main() -> None:
 
     # Add conversation handler with the states
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
+        entry_points=[CommandHandler('start', start), CommandHandler('game', start_game)],
         states={
             MAIN_MENU: [
                 MessageHandler(
@@ -608,6 +715,36 @@ def main() -> None:
                     Filters.text,
                     incorrect_input
                 ),
+            ],
+            USERNAME: [
+                MessageHandler(
+                    Filters.text & ~Filters.command,
+                    start_game,
+                )
+            ],
+            PHONE_NUMBER: [
+                MessageHandler(
+                    Filters.text & ~Filters.command,
+                    get_phone_number,
+                )
+            ],
+            INTERESTS: [
+                MessageHandler(
+                    Filters.text & ~Filters.command,
+                    get_interests,
+                )
+            ],
+            SANTA_LETTER: [
+                MessageHandler(
+                    Filters.text & ~Filters.command,
+                    get_santa_letter,
+                )
+            ],
+            BYE: [
+                MessageHandler(
+                    Filters.text & ~Filters.command,
+                    good_bye_message,
+                )
             ],
         },
         fallbacks=[MessageHandler(Filters.regex('^Выход$'), done)],
