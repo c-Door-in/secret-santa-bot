@@ -1,10 +1,7 @@
 from django.contrib import admin
 from django.db.models import fields
 
-from .models import User
-from .models import Event
-from .models import Participant
-from .models import Interests
+from .models import User, Event, Participant, Interests, Pairs
 
 
 @admin.register(User)
@@ -28,8 +25,9 @@ class EventAdmin(admin.ModelAdmin):
 @admin.register(Participant)
 class ParticipantAdmin(admin.ModelAdmin):
     fields = (
-        'event',
         'user',
+        'name',
+        'event',
         'phone_number',
         'letter_for_santa',
         'interests',
@@ -39,3 +37,8 @@ class ParticipantAdmin(admin.ModelAdmin):
 @admin.register(Interests)
 class InterestsAdmin(admin.ModelAdmin):
     list_display = ('id', 'interest')
+
+
+@admin.register(Pairs)
+class PairsAdmin(admin.ModelAdmin):
+    list_display = ('id', 'event', 'donor', 'receiver')

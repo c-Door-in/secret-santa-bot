@@ -9,7 +9,7 @@ class User(models.Model):
     )
 
     def __str__(self):
-        return f'#{self.external_id} - {self.name}'
+        return f'{self.name}'
 
     class Meta:
         verbose_name = 'Профиль пользователя'
@@ -43,7 +43,7 @@ class Event(models.Model):
     )
 
     def __str__(self):
-        return f'Игра {self.name}, созданная пользователем {self.creator}'
+        return self.name
 
     class Meta:
         verbose_name = 'Игра'
@@ -73,8 +73,12 @@ class Participant(models.Model):
     )
     user = models.ForeignKey(
         to='santabot.User',
-        verbose_name='Имя участника',
+        verbose_name='TG Nickname',
         on_delete=models.CASCADE,
+    )
+    name = models.CharField(
+        max_length=200,
+        verbose_name='Имя участника',
     )
     phone_number = models.CharField(
         max_length=30,
@@ -90,8 +94,35 @@ class Participant(models.Model):
     )
 
     def __str__(self):
-        return f'{self.user} - игра {self.event}'
+        return self.name
 
     class Meta:
         verbose_name = 'Участник'
         verbose_name_plural = 'Участники'
+
+
+class Pairs(models.Model):
+    event = models.ForeignKey(
+        to='santabot.Event',
+        verbose_name='Игра',
+        on_delete=models.CASCADE,
+    )
+    donor = models.ForeignKey(
+        to='santabot.Participant',
+        related_name='Даритель',
+        verbose_name='Ник дарящего',
+        on_delete=models.CASCADE,
+    )
+    receiver = models.ForeignKey(
+        to='santabot.Participant',
+        related_name='Принимающий',
+        verbose_name='Ник получающего',
+        on_delete=models.CASCADE,
+    )
+
+    def __str__(self):
+        return f'Пара {self.donor} - {self.receiver} в игре {self.event}'
+
+    class Meta:
+        verbose_name = 'Пара'
+        verbose_name_plural = 'Выбранные пары'
