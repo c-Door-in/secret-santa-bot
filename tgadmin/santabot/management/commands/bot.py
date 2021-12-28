@@ -78,7 +78,6 @@ def start(update: Update, context: CallbackContext) -> int:
         reply_markup=ReplyKeyboardMarkup(
             keyboard=[
                 ['Создать игру', 'Вступить в игру', 'Мои игры'],
-                ['Выход']
             ],
             one_time_keyboard=True,
             resize_keyboard=True,
