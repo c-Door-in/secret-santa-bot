@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 import re
+import uuid
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -19,6 +20,8 @@ from telegram.ext import (CallbackContext, CallbackQueryHandler, CommandHandler,
                           Filters, MessageHandler, Updater)
 
 from santabot.models import Event, Participant, User, Pairs
+from telegram.utils import helpers
+
 from .bot_utils import datetime_from_str, choose_random_pairs
 
 # Enable logging
@@ -54,6 +57,8 @@ logger = logging.getLogger(__name__)
 ) = range(13, 18)
 
 GAME_DETAILS, DRAW = range(18, 20)
+
+JOIN_GAME_URL_PART = 'join-game-'
 
 
 def start(update: Update, context: CallbackContext) -> int:
@@ -516,12 +521,15 @@ def save_data(update: Update, context: CallbackContext) -> int:
     )
     logger.info('user data: %s', user_data)
 
+    game_uuid = uuid.uuid4()
+
     user_data['event'] = Event.objects.create(
         name=user_data['game_name'],
         creator=user_data['user_profile'],
         cost_range=user_data['cost_range'],
         last_register_date=user_data['last_register_date'],
         sending_date=user_data['sending_date'],
+        game_uuid=game_uuid,
     )
 
     logger.info('Game created in DB, GAME_ID: %s', user_data['event'].pk)
@@ -529,8 +537,16 @@ def save_data(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(
         'Отлично, Тайный Санта уже готовится к раздаче подарков!',
     )
+    bot = context.bot
+    uuid_part = str(game_uuid)
+    ref = JOIN_GAME_URL_PART+uuid_part
+
+    url = helpers.create_deep_linked_url(
+        bot.username, ref, group=False
+    )
+
     update.message.reply_text(
-        'А здесь должна быть реферальная ссылка.',
+        f'Это реферальная ссылка:\n {url}',
         reply_markup=ReplyKeyboardMarkup(
             keyboard=[['Выход', 'Меню']],
             resize_keyboard=True,
@@ -561,22 +577,39 @@ def done(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
-def start_game(update: Update, context: CallbackContext):
+def start_game(update: Update, context: CallbackContext) -> int:
+    """Joining user to game."""
     user_data = context.user_data
+    args = context.args
+
+    game_uuid_url = args[0]
+    link_uuid_str = re.search(
+        '^join-game-([a-zA-Z0-9_.-]*)$',
+        game_uuid_url
+    )[1] # 1 group
+
     logger.info(
         'user %s: %s', update.message.from_user.name, update.message.text
     )
     logger.info('user data: %s', user_data)
-    # event = Event.objects.get(pk=game_id) После того, как узнаем ID ключа.
-    # Подставить в welcome_message значения: event.name, event.cost_range, event.last_register, event.sending_date
 
-    welcome_message = 'Замечательно, ты собираешься участвовать в игре.\n'\
-        'Имя игры: %ИМЯ_ИГРЫ%\n'\
-        'Ограничение стоимости подарка: %СТОИМОСТЬ_ПОДАРКА%\n'\
-        'Период регистрации: %ПЕРИОД_РЕГИСТРАЦИИ%\n'\
-        'Дата отправки подарка: %ДАТА_ОТПРАВКИ_ПОДАРКА%\n'
+    # TODO: обработка исключений
+    event = Event.objects.get(
+        game_uuid=uuid.UUID(link_uuid_str)
+    )
+
+    welcome_message = (
+        'Замечательно, ты собираешься участвовать в игре.\n\n'
+
+        f'Имя игры: {event.name}\n'
+        f'Игру создал: {event.creator}\n'
+        f'Ограничение стоимости подарка: {event.cost_range}\n'
+        f'Период регистрации: {event.last_register_date}\n'
+        f'Дата отправки подарка: {event.sending_date}\n'
+    )
     update.message.reply_text(welcome_message)
-    update.message.reply_text('Введи своё имя:' ,
+    update.message.reply_text(
+        'Введи своё имя:',
         reply_markup=ReplyKeyboardMarkup(
             keyboard=[
                 [f'{update._effective_chat.first_name}'],
@@ -585,11 +618,11 @@ def start_game(update: Update, context: CallbackContext):
             resize_keyboard=True,
         ),
     )
-
+    print(PHONE_NUMBER)
     return PHONE_NUMBER
 
 
-def get_phone_number(update: Update, context: CallbackContext):
+def get_phone_number(update: Update, context: CallbackContext) -> int:
     user_data = context.user_data
     logger.info(
         'user %s: %s', update.message.from_user.name, update.message.text
@@ -604,7 +637,7 @@ def get_phone_number(update: Update, context: CallbackContext):
     return INTERESTS
 
 
-def get_interests(update: Update, context: CallbackContext):
+def get_interests(update: Update, context: CallbackContext) -> int:
     user_data = context.user_data
     logger.info(
         'user %s: %s', update.message.from_user.name, update.message.text
@@ -626,7 +659,7 @@ def get_interests(update: Update, context: CallbackContext):
     return SANTA_LETTER
 
 
-def get_santa_letter(update: Update, context: CallbackContext):
+def get_santa_letter(update: Update, context: CallbackContext) -> int:
     user_data = context.user_data
     logger.info(
         'user %s: %s', update.message.from_user.name, update.message.text
@@ -641,7 +674,7 @@ def get_santa_letter(update: Update, context: CallbackContext):
     return BYE
 
 
-def good_bye_message(update: Update, context: CallbackContext):
+def good_bye_message(update: Update, context: CallbackContext) -> int:
     user_data = context.user_data
     logger.info(
         'user %s: %s', update.message.from_user.name, update.message.text
@@ -668,10 +701,13 @@ def main() -> None:
 
     # Get the dispatcher to register handlers
     dispatcher = updater.dispatcher
-
     # Add conversation handler with the states
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start), CommandHandler('game', start_game)],
+        entry_points=[
+              CommandHandler('start', start_game, Filters.regex('join-game-[a-zA-Z0-9_.-]*'), pass_args=True),
+              CommandHandler('start', start, ~Filters.regex('join-game-[a-zA-Z0-9_.-]*')),
+              CommandHandler('game', start_game),
+            ],
         states={
             MAIN_MENU: [
                 MessageHandler(

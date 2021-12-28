@@ -1,4 +1,7 @@
+import uuid
+
 from django.db import models
+
 
 class User(models.Model):
     external_id = models.PositiveIntegerField(
@@ -41,7 +44,12 @@ class Event(models.Model):
     sending_date = models.DateTimeField(
         verbose_name='Дата отправки подарка',
     )
-
+    game_uuid = models.UUIDField(
+        verbose_name='Уникальный идентификатор для deeplink',
+        primary_key=False,
+        default=uuid.uuid4,
+        editable=False
+    )
     def __str__(self):
         return self.name
 
