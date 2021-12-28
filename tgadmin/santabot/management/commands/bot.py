@@ -242,7 +242,7 @@ def draw_result(update: Update, context: CallbackContext) -> int:
     )
     query.edit_message_text(
         text=text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        # reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
     return GAME_DETAILS
