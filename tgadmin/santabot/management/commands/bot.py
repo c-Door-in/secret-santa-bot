@@ -166,9 +166,14 @@ def game_details(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     event = Event.objects.get(name=query.data)
     query.answer()
-    participants = '\n'.join([f'{user}' for user in Participant.objects.filter(event=event)])
     keyboard = [[]]
-    if not Pairs.objects.all():
+    participants = Participant.objects.filter(event=event)
+    if not participants:
+        query.edit_message_text('Нет игроков.')
+        # keyboard = [[InlineKeyboardButton('Меню', callback_data='start')]]
+        return GAME_DETAILS
+    elif not Pairs.objects.all():
+        participant_list = '\n'.join([f'{user}' for user in participants])
         keyboard = [
             [InlineKeyboardButton('Провести жеребьевку вручную', callback_data=event.name)],
             # [InlineKeyboardButton('Меню', callback_data='start')],
@@ -176,11 +181,12 @@ def game_details(update: Update, context: CallbackContext) -> int:
         text = (
             f'Игра {event.name}\n'
             f'Список участников:\n'
-            f'{participants}\n'
+            f'{participant_list}\n'
             f'Жеребьевка будет проведена {event.last_register_date}\n'
             f'Дата отправки подарка - {event.sending_date}\n'
         )
     else:
+        participant_list = '\n'.join([f'{user}' for user in participants])
         keyboard = [
             [InlineKeyboardButton('Показать пары', callback_data=event.name)],
             # [InlineKeyboardButton('Меню', callback_data='start')],
@@ -188,7 +194,7 @@ def game_details(update: Update, context: CallbackContext) -> int:
         text = (
             f'Игра {event.name}\n'
             f'Список участников:\n'
-            f'{participants}\n'
+            f'{participant_list}\n'
             f'Жеребьевка была проведена\n'
             f'Дата отправки подарка - {event.sending_date}\n'
         )
@@ -221,7 +227,9 @@ def draw_result(update: Update, context: CallbackContext) -> int:
         draw(event)
     pairs = Pairs.objects.filter(event=event)
     for pair in pairs:
-        pairs_list += '{donor.name} -> {receiver}\n'.format(pair)
+        donor = pair.donor.name
+        receiver = pair.receiver.name
+        pairs_list += f'{donor} -> {receiver}\n'
     keyboard = [
         [InlineKeyboardButton('Назад', callback_data='back')],
         [InlineKeyboardButton('Меню', callback_data='start')],
@@ -709,6 +717,7 @@ def main() -> None:
                 # )
             ],
             GAME_DETAILS: [
+                CommandHandler('start', start),
                 CallbackQueryHandler(start, pattern='^start$'),
                 CallbackQueryHandler(draw_result),
             ],
