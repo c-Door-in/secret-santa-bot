@@ -691,7 +691,7 @@ def good_bye_message(update: Update, context: CallbackContext) -> int:
     update.message.reply_text(bye_message)
     user_data.clear()
 
-    return ConversationHandler.END
+    return start(update, context)
 
 
 def main() -> None:
