@@ -69,6 +69,7 @@ class Participant(models.Model):
     event = models.ForeignKey(
         to='santabot.Event',
         verbose_name='Игра',
+        related_name='participant',
         on_delete=models.CASCADE,
     )
     user = models.ForeignKey(
@@ -109,13 +110,13 @@ class Pairs(models.Model):
     )
     donor = models.ForeignKey(
         to='santabot.Participant',
-        related_name='Даритель',
+        related_name='donor',
         verbose_name='Ник дарящего',
         on_delete=models.CASCADE,
     )
     receiver = models.ForeignKey(
         to='santabot.Participant',
-        related_name='Принимающий',
+        related_name='receiver',
         verbose_name='Ник получающего',
         on_delete=models.CASCADE,
     )

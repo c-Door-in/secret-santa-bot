@@ -7,12 +7,19 @@ import re
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from pytz import timezone
-from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, message
-from telegram.ext import (CallbackContext, CommandHandler, ConversationHandler,
+from telegram import (
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    Update,
+    message
+)
+from telegram.ext import (CallbackContext, CallbackQueryHandler, CommandHandler, ConversationHandler,
                           Filters, MessageHandler, Updater)
 
-from santabot.models import Event, Participant, User
-from .bot_utils import datetime_from_str
+from santabot.models import Event, Participant, User, Pairs
+from .bot_utils import datetime_from_str, choose_random_pairs
 
 # Enable logging
 logging.basicConfig(
@@ -45,6 +52,8 @@ logger = logging.getLogger(__name__)
     SANTA_LETTER,
     BYE
 ) = range(13, 18)
+
+GAME_DETAILS, DRAW = range(18, 20)
 
 
 def start(update: Update, context: CallbackContext) -> int:
@@ -133,37 +142,103 @@ def list_games(update: Update, context: CallbackContext) -> int:
     )
     logger.info('user data: %s', user_data)
 
+    tg_id = user_data['user_profile'].external_id
+    keyboard = [[]]
     if update.message.text == 'Игры, которые я создал':
         msg = 'Здесь список созданных игр.\n\n'
-        tg_id = update.message.from_user.id
-        created_games = [
-            event.name for event in Event.objects.filter(creator__external_id=tg_id)
-        ]
-        msg += '\n'.join(created_games)
-
+        events = Event.objects.filter(creator__external_id=tg_id)
     if update.message.text == 'Игры, где я участник':
-        tg_id = update.message.from_user.id
-        user = User.objects.get(external_id=tg_id)
-        joined_games = [
-            participant.event.name for participant in
-            Participant.objects.filter(user=user)
-        ]
         msg = 'Здесь список игр в которых участвую(-ал).\n\n'
-        msg += '\n'.join(joined_games)
-
-
+        events = Event.objects.filter(participant__user__external_id=tg_id)
+    for event in events:
+        keyboard.append(
+            [InlineKeyboardButton(event.name, callback_data=event.name)],
+        )
     update.message.reply_text(
         msg,
-        reply_markup=ReplyKeyboardMarkup(
-            keyboard=[
-                ['Назад', 'Меню']
-            ],
-            one_time_keyboard=True,
-            resize_keyboard=True,
-        ),
+        reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
     return MY_GAMES
+
+
+def game_details(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    event = Event.objects.get(name=query.data)
+    query.answer()
+    participants = '\n'.join([f'{user}' for user in Participant.objects.filter(event=event)])
+    keyboard = [[]]
+    if not Pairs.objects.all():
+        keyboard = [
+            [InlineKeyboardButton('Провести жеребьевку вручную', callback_data=event.name)],
+            # [InlineKeyboardButton('Меню', callback_data='start')],
+        ]
+        text = (
+            f'Игра {event.name}\n'
+            f'Список участников:\n'
+            f'{participants}\n'
+            f'Жеребьевка будет проведена {event.last_register_date}\n'
+            f'Дата отправки подарка - {event.sending_date}\n'
+        )
+    else:
+        keyboard = [
+            [InlineKeyboardButton('Показать пары', callback_data=event.name)],
+            # [InlineKeyboardButton('Меню', callback_data='start')],
+        ]
+        text = (
+            f'Игра {event.name}\n'
+            f'Список участников:\n'
+            f'{participants}\n'
+            f'Жеребьевка была проведена\n'
+            f'Дата отправки подарка - {event.sending_date}\n'
+        )
+    query.edit_message_text(
+        text=text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+    return GAME_DETAILS
+    
+
+def draw(event):
+    participants = list(Participant.objects.filter(event=event).values_list('user__name', flat=True))
+    pairs = choose_random_pairs(participants)
+    for pair in pairs:
+        for donor, receiver in pair.items():
+            Pairs.objects.create(
+                event=event,
+                donor=Participant.objects.get(user__name=donor, event=event),
+                receiver=Participant.objects.get(user__name=receiver, event=event),
+            )
+    return
+
+def draw_result(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    event = Event.objects.get(name=query.data)
+    query.answer()
+    pairs_list = ''
+    if not Pairs.objects.all():
+        draw(event)
+    pairs = Pairs.objects.filter(event=event)
+    for pair in pairs:
+        pairs_list += '{donor.name} -> {receiver}\n'.format(pair)
+    keyboard = [
+        [InlineKeyboardButton('Назад', callback_data='back')],
+        [InlineKeyboardButton('Меню', callback_data='start')],
+    ]
+    text = (
+        f'Игра {event.name}\n'
+        f'Результаты жеребьевки:\n'
+        f'*Даритель* -> *Принимающий*'
+        f'{pairs_list}'
+    )
+    query.edit_message_text(
+        text=text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+    return GAME_DETAILS
+
 
 
 def enter_game_name(update: Update, context: CallbackContext) -> int:
@@ -626,11 +701,16 @@ def main() -> None:
                 ),
                 MessageHandler(
                     Filters.regex('^Меню$'), start
-                )
+                ),
+                CallbackQueryHandler(game_details),
                 # MessageHandler(
                 #     Filters.text & ~(Filters.regex('^Меню$') | Filters.command),
                 #     incorrect_input
                 # )
+            ],
+            GAME_DETAILS: [
+                CallbackQueryHandler(start, pattern='^start$'),
+                CallbackQueryHandler(draw_result),
             ],
             COST_LIMITS: [
                 MessageHandler(
